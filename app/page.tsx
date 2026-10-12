@@ -23,13 +23,12 @@ import {
 
   ChevronRight,
 
-  CircleHelp,
 
   Compass,
 
   Fish,
+  Expand,
 
-  Flower2,
 
   Footprints,
 
@@ -38,16 +37,16 @@ import {
 
   MapPin,
 
-  Menu,
 
 
   MoreHorizontal,
+
+  RefreshCw,
 
   Search,
 
   Sparkles,
 
-  Star,
 
   Target,
 
@@ -146,7 +145,7 @@ function Home({ onTab, onOpen, items, session }: { onTab: (tab: Tab) => void; on
 
     <section className="section-block"><div className="section-heading"><div><p className="eyebrow">NEARBY, DEMONSTRATION</p><h2>Worth a closer look</h2></div><button className="text-link" onClick={() => onTab('explore')}>Explore <ArrowRight size={15} /></button></div><div className="recommendation"><img src={species[0].image} alt="European robin perched on a branch" /><div><span className="rarity">UNCOMMON · 20 PTS</span><h3>European Robin</h3><p>Often found in woodland edges and quiet gardens.</p><button className="outline-button" onClick={() => onTab('explore')}>Where should I look?</button></div></div></section>
 
-    <section className="section-block collection-strip"><div className="section-heading"><div><p className="eyebrow">YOUR COMPENDIUM</p><h2>Recently added</h2></div><button className="text-link" onClick={() => onTab('collection')}>Open compendium <ArrowRight size={15} /></button></div><div className="mini-row">{recentItems.map((item) => <button className="mini-card" key={item.name} onClick={() => onTab('collection')}><img src={item.image} alt={item.name} /><span>{item.name}</span></button>)}</div></section>
+    <section className="section-block collection-strip"><div className="section-heading"><div><p className="eyebrow">YOUR COMPENDIUM</p><h2>Recently added</h2></div><button className="text-link" onClick={() => onTab('collection')}>Open compendium <ArrowRight size={15} /></button></div><div className="mini-row">{recentItems.map((item, index) => <button className="mini-card" key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`} onClick={() => onTab('collection')}><img src={item.image} alt={item.name} /><span>{item.name}</span></button>)}</div></section>
 
   </div>
 
@@ -373,7 +372,6 @@ function Quests({
   }, [session.active, session.startedAt])
 
   if (summaryEntry) {
-    const isPreview = summaryEntry.id.startsWith('preview-')
     const summaryWalkingPoints = walkingPoints(summaryEntry.steps)
     const summaryDiscoveryPoints = entryDiscoveryPoints(summaryEntry)
     const discoveredCards = summaryEntry.discoveries.map((name, index) => {
@@ -388,7 +386,6 @@ function Quests({
     })
 
     return <div className="screen quest-completion-screen">
-      {isPreview && <div className="quest-preview-banner">DEVELOPMENT PREVIEW · This sample is not saved to Quest History.</div>}
       <section className="quest-completion-hero">
         <span className="quest-completion-emblem">✓</span>
         <p className="eyebrow">FIELD SESSION COMPLETE</p>
@@ -418,7 +415,7 @@ function Quests({
       <p className="quest-completion-footnote">{summaryEntry.routePoints >= 2 ? 'Distance is estimated from GPS route samples and may differ from the actual route.' : 'Distance could not be estimated because this session did not record enough GPS positions.'} {summaryEntry.endReason === 'time-limit' ? 'The 12-hour session limit was reached.' : 'You ended this field session manually.'}</p>
       <div className="quest-completion-actions">
         <button className="dark-button full" onClick={() => { onDismissSummary(); setView('history') }}>View quest history <ArrowRight size={15} /></button>
-        <button className="cream-button" onClick={() => { onDismissSummary(); setView('current'); if (!(isPreview && session.active)) onStart() }}>{isPreview && session.active ? 'Return to active quest' : 'Start another quest'} <ArrowRight size={15} /></button>
+        <button className="cream-button" onClick={() => { onDismissSummary(); setView('current'); onStart() }}>Start another quest <ArrowRight size={15} /></button>
         <button className="outline-button" onClick={() => { onDismissSummary(); setView('current') }}>Back to quests</button>
       </div>
     </div>
@@ -451,12 +448,296 @@ function Quests({
       </section>
       <section className="section-block"><div className="section-heading"><div><p className="eyebrow">FIELD LOG</p><h2>Species this quest</h2></div><button className="text-link" onClick={() => setView('history')}>Past quests <ArrowRight size={15} /></button></div>{session.discoveries.length ? <div className="quest-discovery-list">{session.discoveries.map((name, index) => { const key = session.discoveryKeys?.[index] || speciesTaxonKey(name, knownScientificName(name)); const reward = session.discoveryPointAwards?.[key]; return <div key={`${key}-${index}`}><Leaf size={16} /><span>{name}</span><strong>{reward === undefined ? '+25 pts' : reward > 0 ? `+${reward} pts` : 'Logged · no repeat points today'}</strong></div> })}</div> : <p className="modal-text">Your first successful photo identification during this session will appear here.</p>}</section>
     </>}
-    {/* TEMPORARY QA SHORTCUT: remove this block after testing the completion screen. */}
     
   </div>
 }
 
-function Explore({ onOpen }: { onOpen: (kind: string) => void }) { return <div className="screen"><div className="page-title"><p className="eyebrow">DEMONSTRATION EXPLORATION</p><h1>Look a little closer.</h1><p>Recommendations are examples, not verified live sightings.</p></div><div className="searchbox"><Search size={18} /><span>Search a species or habitat</span></div><div className="filter-row"><button className="filter active">All habitats</button><button className="filter">Woodland</button><button className="filter">Coastal</button></div><div className="map-card"><div className="map-art"><span className="map-label one">Woodland edge</span><span className="map-label two">Harbourside</span><div className="map-pin"><MapPin size={18} /></div></div><div className="map-footer"><div><strong>Places to explore</strong><span><MapPin size={13} /> Bristol, UK · demonstration</span></div><button className="outline-button" onClick={() => onOpen('location')}>Change</button></div></div><div className="section-heading compact"><div><p className="eyebrow">SUITABLE HABITATS</p><h2>Where should I look?</h2></div><button className="icon-button"><MoreHorizontal size={19} /></button></div>{species.slice(0, 3).map((item) => <div className="habitat-row" key={item.name}><img src={item.image} alt="" /><div><span className="rarity">{item.rarity.toUpperCase()} · {item.points} PTS</span><h3>{item.name}</h3><p>{item.category} · Suitable habitat nearby</p></div><ChevronRight size={17} /></div>)}</div> }
+type NearbySpecies = {
+  key: string
+  name: string
+  scientificName: string
+  latitude: number | null
+  longitude: number | null
+  observedAt: string | null
+  photo: string | null
+  photoSource?: string | null
+  photoAttribution?: string | null
+  source: string
+  priorityLabel?: string
+  nearbyRecordCount?: number
+  taxonGroup?: string
+  isInsect?: boolean
+  isCoastalWildlife?: boolean
+  recommendationReason?: string
+}
+
+type WorldCoverClass = {
+  code: number
+  name: string
+  samples: number
+  samplePercent: number
+}
+
+type NearbyHabitat = {
+  source: string
+  year: number
+  resolutionMeters: number
+  samplingRadiusKm: number
+  attemptedSamples: number
+  validSamples: number
+  dominantHabitat: string | null
+  classes: WorldCoverClass[]
+  attribution: string
+  note: string
+}
+
+const worldCoverColors: Record<number, string> = {
+  10: '#587b4e', 20: '#a7a86f', 30: '#c6ce8b', 40: '#d7b85c', 50: '#9b7770',
+  60: '#c8b9a1', 70: '#d8e5e7', 80: '#83b7c7', 90: '#6d9c8b', 95: '#4d8377', 100: '#a8b58c',
+}
+
+function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSearchStatusChange: (status: 'running' | 'finished') => void }) {
+  const [loading, setLoading] = useState(false)
+  const [loadingStage, setLoadingStage] = useState('Requesting your GPS location…')
+  const [unavailablePhotoKeys, setUnavailablePhotoKeys] = useState<string[]>([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [nearbySpecies, setNearbySpecies] = useState<NearbySpecies[]>([])
+  const [habitat, setHabitat] = useState<NearbyHabitat | null>(null)
+  const [habitatError, setHabitatError] = useState('')
+  const [locationLabel, setLocationLabel] = useState('Location not shared')
+  const [gpsCoordinates, setGpsCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null)
+  const [expandedSpeciesKey, setExpandedSpeciesKey] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<{ url: string; scientificName: string; commonName: string } | null>(null)
+
+  useEffect(() => {
+    if (!photoPreview) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPhotoPreview(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [photoPreview])
+
+  async function findWildlife() {
+    setError('')
+    setMessage('')
+    setHabitatError('')
+    setHabitat(null)
+    setNearbySpecies([])
+    setUnavailablePhotoKeys([])
+    setLoadingStage('Requesting your GPS location…')
+    if (!('geolocation' in navigator)) {
+      setError('This browser does not support location. Try a modern browser or use manual location later.')
+      return
+    }
+    setLoading(true)
+    onSearchStatusChange('running')
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude, accuracy } = position.coords
+      setGpsCoordinates({ latitude, longitude })
+      setGpsAccuracy(Number.isFinite(accuracy) ? accuracy : null)
+      setExpandedSpeciesKey(null)
+      setLocationLabel(`${latitude.toFixed(4)}, ${longitude.toFixed(4)} · GPS`)
+      setLoadingStage('Checking nearby wildlife and mapping habitats…')
+      const habitatRequest = fetch(`http://127.0.0.1:5000/explore/habitat?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`)
+        .then(async (response) => {
+          const payload = await response.json()
+          if (!response.ok) throw new Error(payload.error || 'Could not retrieve ESA WorldCover habitat data.')
+          return payload as NearbyHabitat
+        })
+      const speciesRequest = fetch('http://127.0.0.1:5000/explore/nearby', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          existingSpecies: items.map((item) => ({ name: item.name, scientificName: item.latin })),
+        }),
+      }).then(async (response) => {
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'Could not retrieve nearby species.')
+        return payload
+      })
+
+      try {
+        const [habitatResult, speciesResult] = await Promise.allSettled([habitatRequest, speciesRequest])
+
+        if (habitatResult.status === 'fulfilled') {
+          setHabitat(habitatResult.value)
+        } else {
+          setHabitatError(habitatResult.reason instanceof Error ? habitatResult.reason.message : 'Could not retrieve ESA WorldCover habitat data. Check that Flask is running and rasterio is installed.')
+        }
+
+        if (speciesResult.status === 'fulfilled') {
+          const payload = speciesResult.value
+          // Keep the five-species limit in the UI too, in addition to the backend limit.
+          let records = (Array.isArray(payload.species) ? payload.species as NearbySpecies[] : []).slice(0, 5)
+          if (records.length > 0 && habitatResult.status === 'fulfilled') {
+            setLoadingStage('Asking hosted Gemma to rank the evidence…')
+            try {
+              const recommendationResponse = await fetch('http://127.0.0.1:5000/explore/recommend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  coastalLocation: Boolean(payload.coastalLocation),
+                  habitat: habitatResult.value,
+                  species: records.map((item) => ({
+                    key: item.key,
+                    name: item.name,
+                    scientificName: item.scientificName,
+                    observedAt: item.observedAt,
+                    nearbyRecordCount: item.nearbyRecordCount,
+                    priorityLabel: item.priorityLabel,
+                    taxonGroup: item.taxonGroup,
+                    isInsect: item.isInsect,
+                    isCoastalWildlife: item.isCoastalWildlife,
+                  })),
+                }),
+              })
+              const recommendationPayload = await recommendationResponse.json()
+              if (!recommendationResponse.ok) throw new Error(recommendationPayload.error || 'Gemma recommendation request failed.')
+              const byScientificName = new Map(records.map((item) => [item.scientificName.trim().toLowerCase(), item]))
+              const ranked: NearbySpecies[] = []
+              if (Array.isArray(recommendationPayload.recommendations)) {
+                for (const recommendation of recommendationPayload.recommendations) {
+                  if (!recommendation || typeof recommendation.scientificName !== 'string') continue
+                  const candidate = byScientificName.get(recommendation.scientificName.trim().toLowerCase())
+                  if (candidate && !ranked.some((item) => item.scientificName === candidate.scientificName)) {
+                    ranked.push({ ...candidate, recommendationReason: typeof recommendation.reason === 'string' ? recommendation.reason : undefined })
+                  }
+                }
+              }
+              if (ranked.length) {
+                const rankedNames = new Set(ranked.map((item) => item.scientificName.trim().toLowerCase()))
+                records = [...ranked, ...records.filter((item) => !rankedNames.has(item.scientificName.trim().toLowerCase()))].slice(0, 5)
+                setMessage(`Gemma ranked ${ranked.length} candidates using nearby GBIF records and ESA habitat context. These are evidence-based suggestions, not confirmation of current presence.`)
+              } else {
+                setMessage('Habitat and GBIF data loaded, but Gemma did not return a valid ranking. Showing the original GBIF order instead.')
+              }
+            } catch (recommendationError) {
+              console.warn('Gemma wildlife recommendation failed; retaining GBIF ranking.', recommendationError)
+              setMessage('Habitat and GBIF data loaded. Gemma recommendations were unavailable, so the original GBIF ranking is shown.')
+            }
+          }
+          setNearbySpecies(records)
+          if (!records.length) {
+            setMessage('No eligible new animal species were found in this search batch. Species already in your Compendium are excluded; try again later.')
+          } else if (habitatResult.status !== 'fulfilled') {
+            setMessage('GBIF species records loaded, but habitat data was unavailable, so Gemma ranking was skipped.')
+          }
+        } else {
+          setError(speciesResult.reason instanceof Error ? speciesResult.reason.message : 'Could not retrieve nearby species. Check that Flask is running on port 5000.')
+        }
+      } finally {
+        setLoading(false)
+        onSearchStatusChange('finished')
+      }
+    }, (geoError) => {
+      setLoading(false)
+      onSearchStatusChange('finished')
+      if (geoError.code === geoError.PERMISSION_DENIED) setError('Location permission was denied. Allow location access in your browser settings and try again.')
+      else if (geoError.code === geoError.TIMEOUT) setError('Location lookup timed out. Please try again.')
+      else setError('Could not determine your location. Check your device location settings and try again.')
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 })
+  }
+
+  // Keep the two independent data sources together as one evidence bundle.
+  // This is the structured context assembled from the two live data sources.
+  const combinedExploreContext = habitat && nearbySpecies.length > 0 ? {
+    coordinates: gpsCoordinates,
+    radiusKm: habitat.samplingRadiusKm,
+    dominantHabitat: habitat.dominantHabitat,
+    habitatClasses: habitat.classes.slice(0, 4).map(({ name, samplePercent, samples }) => ({ name, samplePercent, samples })),
+    species: nearbySpecies.slice(0, 5).map(({ scientificName, name, observedAt, nearbyRecordCount }) => ({ scientificName, commonName: name, observedAt, nearbyRecordCount })),
+    evidenceNote: 'Land-cover classes describe the surrounding area. GBIF records document observations within the search radius; they do not prove that a species currently occurs in a particular land-cover class.',
+  } : null
+
+  const mapSrc = gpsCoordinates ? (() => {
+    const { latitude, longitude } = gpsCoordinates
+    const south = Math.max(-85, latitude - 0.11)
+    const north = Math.min(85, latitude + 0.11)
+    const west = Math.max(-180, longitude - 0.12)
+    const east = Math.min(180, longitude + 0.12)
+    const bounds = [west, south, east, north].map((value) => value.toFixed(6)).join(',')
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bounds)}&layer=mapnik&marker=${latitude}%2C${longitude}`
+  })() : ''
+
+  return <div className="screen">
+    <div className="page-title"><p className="eyebrow">LOCAL BIODIVERSITY</p><h1>Look a little closer.</h1><p>Find up to five new species recorded near you per search. Anything already in your Compendium is excluded.</p></div>
+    <div className="map-card explore-map-card">
+      <div className="explore-map-wrap">
+        {gpsCoordinates ? <iframe className="explore-map-iframe" title="OpenStreetMap centered on your GPS location" src={mapSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : <div className="explore-map-empty"><span className="explore-map-empty-icon"><MapPin size={23} /></span><strong>Your map will appear here</strong><span>Share your location to view a real map centered on your GPS coordinates.</span></div>}
+      </div>
+      <div className="map-footer"><div><strong>Your exploration area</strong><span><MapPin size={13} /> {locationLabel}{gpsAccuracy !== null ? ` · ±${Math.round(gpsAccuracy)} m` : ''}</span></div><button className="outline-button" onClick={findWildlife} disabled={loading}>{loading ? 'Finding…' : gpsCoordinates ? 'Refresh nearby' : 'Find wildlife near me'}</button></div>
+      {gpsCoordinates && <a className="explore-open-map" href={`https://www.openstreetmap.org/?mlat=${gpsCoordinates.latitude}&mlon=${gpsCoordinates.longitude}#map=14/${gpsCoordinates.latitude}/${gpsCoordinates.longitude}`} target="_blank" rel="noreferrer">Open larger map <ArrowRight size={13} /></a>}
+    </div>
+    {loading && <section className="explore-loading-panel" role="status" aria-live="polite" aria-label="Wildlife search in progress">
+      <div className="explore-loading-visual" aria-hidden="true"><span className="explore-loading-ring" /><span className="explore-loading-leaf"><Leaf size={23} /></span></div>
+      <div className="explore-loading-copy"><p className="eyebrow">EXPLORING YOUR AREA</p><h3>{loadingStage}</h3><p>Checking ESA WorldCover, nearby GBIF observations, and backup species photos. This can take a little time—you can keep using other WildQuest tabs.</p></div>
+      <div className="explore-loading-progress" aria-hidden="true"><span /><span /><span /></div>
+    </section>}
+    {error && <p className="modal-text" role="alert" style={{ marginTop: 12 }}>{error}</p>}
+    {habitatError && <p className="modal-text" role="status" style={{ marginTop: 12 }}>Habitat lookup unavailable: {habitatError}</p>}
+    {habitat && <section className="worldcover-panel">
+      <div className="section-heading compact"><div><p className="eyebrow">ESA WORLDCOVER · 2021</p><h2>Land cover near you</h2></div><span className="worldcover-radius">{habitat.samplingRadiusKm} km area</span></div>
+      <p className="worldcover-intro">{habitat.validSamples} of {habitat.attemptedSamples} sample points were classified from the 10 m land-cover dataset.</p>
+      {habitat.classes.slice(0, 4).map((landClass) => <div className="worldcover-class" key={landClass.code}>
+        <div className="worldcover-class-heading"><span className="worldcover-dot" style={{ backgroundColor: worldCoverColors[landClass.code] || '#a4ac86' }} /><div className="worldcover-class-label"><strong>{landClass.name}</strong><small>{landClass.samples} sample {landClass.samples === 1 ? 'point' : 'points'}</small></div><b>{landClass.samplePercent}%</b></div>
+        <div className="worldcover-bar"><span style={{ width: `${landClass.samplePercent}%`, backgroundColor: worldCoverColors[landClass.code] || '#a4ac86' }} /></div>
+      </div>)}
+      <p className="worldcover-attribution">{habitat.note} {habitat.attribution}</p>
+    </section>}
+    {combinedExploreContext && <section className="combined-context-panel" aria-label="Combined habitat and wildlife context">
+      <div className="combined-context-heading"><div><p className="eyebrow">LOCAL BIODIVERSITY CONTEXT</p><h2>Habitat + wildlife records</h2></div><span className="combined-context-badge">Combined evidence</span></div>
+      <div className="combined-context-stats"><div><span>Dominant sampled land cover</span><strong>{combinedExploreContext.dominantHabitat || 'Not classified'}</strong></div><div><span>New species records</span><strong>{combinedExploreContext.species.length} of 5 maximum</strong></div></div>
+      <div className="combined-context-habitats"><span className="combined-context-label">Other sampled land-cover classes</span><div>{combinedExploreContext.habitatClasses.map((landClass) => <span key={landClass.name}>{landClass.name} · {landClass.samplePercent}%</span>)}</div></div>
+      <p className="combined-context-note">{combinedExploreContext.evidenceNote}</p>
+    </section>}
+    {message && <p className="modal-text" role="status" style={{ marginTop: 12 }}>{message}</p>}
+    <div className="section-heading compact"><div><p className="eyebrow">GBIF OCCURRENCE RECORDS</p><h2>{nearbySpecies.length ? 'Species recorded nearby' : 'What might you find?'}</h2></div><button className="icon-button" onClick={findWildlife} aria-label="Refresh nearby species" title="Refresh nearby species" disabled={loading}><RefreshCw size={16} /></button></div>
+    {nearbySpecies.length ? <div className="nearby-species-list">{nearbySpecies.map((item, index) => {
+      const cardKey = item.key || `${item.scientificName}-${index}`
+      const expanded = expandedSpeciesKey === cardKey
+      const hasCoordinates = item.latitude !== null && item.longitude !== null && Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
+      const observationMapUrl = hasCoordinates ? `https://www.openstreetmap.org/?mlat=${item.latitude}&mlon=${item.longitude}#map=15/${item.latitude}/${item.longitude}` : ''
+      const scientificName = item.scientificName || item.name
+      const commonName = item.name && item.name.toLowerCase() !== scientificName.toLowerCase() ? item.name : ''
+      return <article className={`nearby-species-card ${expanded ? 'is-expanded' : ''}`} key={cardKey}>
+        <div className="nearby-species-row">
+          {item.photo && !unavailablePhotoKeys.includes(cardKey) ? <button className="nearby-species-photo-button" type="button" aria-label={`Expand photo of ${scientificName}`} onClick={() => setPhotoPreview({ url: item.photo as string, scientificName, commonName })}>
+            <img src={item.photo} alt={`Photo of ${scientificName}`} loading="lazy" onError={() => setUnavailablePhotoKeys((current) => current.includes(cardKey) ? current : [...current, cardKey])} />
+            <span className="nearby-photo-expand-hint"><Expand size={14} /></span>
+          </button> : <span className="nearby-species-thumb" aria-label="No image available"><Leaf size={24} /></span>}
+          <button className="nearby-species-trigger" type="button" aria-expanded={expanded} aria-controls={`nearby-species-details-${index}`} onClick={() => setExpandedSpeciesKey(expanded ? null : cardKey)}>
+            <span className="nearby-species-main"><span className="rarity">GBIF · RECORDED OBSERVATION</span><strong>{scientificName}</strong>{commonName && <em>{commonName}</em>}<small>{item.observedAt ? item.observedAt.slice(0, 10) : 'Observation date not supplied'}</small>{item.priorityLabel && <span className="nearby-priority-label">{item.priorityLabel}</span>}</span>
+            <ChevronRight className="nearby-species-chevron" size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {expanded && <div className="nearby-species-details" id={`nearby-species-details-${index}`}>
+          <div><span>Scientific name</span><strong>{scientificName}</strong></div>
+          {commonName && <div><span>Common name</span><strong>{commonName}</strong></div>}
+          <div><span>Recorded date</span><strong>{item.observedAt ? item.observedAt.slice(0, 10) : 'Not supplied by GBIF'}</strong></div>
+          {typeof item.nearbyRecordCount === 'number' && <div><span>Records in this nearby result batch</span><strong>{item.nearbyRecordCount}</strong></div>}
+          {item.recommendationReason && <div><span>Why WildQuest recommends it</span><strong>{item.recommendationReason}</strong></div>}
+          {hasCoordinates && <div><span>Observation coordinates</span><strong>{item.latitude!.toFixed(5)}, {item.longitude!.toFixed(5)}</strong></div>}
+          <p>GBIF documents an occurrence record here; it does not confirm that the species is present today. Local record frequency is only a rough ranking signal, not proof of biological rarity.</p>
+          {hasCoordinates && <a href={observationMapUrl} target="_blank" rel="noreferrer">View record location on map <ArrowRight size={13} /></a>}
+          {item.photo && <button className="nearby-detail-photo-link" type="button" onClick={() => setPhotoPreview({ url: item.photo as string, scientificName, commonName })}>View larger photo <Expand size={13} /></button>}
+        </div>}
+      </article>
+    })}</div> : <div className="quest-history-empty"><h2>{locationLabel === 'Location not shared' ? 'Start with your location' : 'No new species in this batch'}</h2><p>{locationLabel === 'Location not shared' ? 'Tap the button above to request GPS permission and find up to five species with documented observations nearby. Species already in your Compendium are excluded.' : 'No new species are currently displayed. Check the lookup message above. Habitat data is listed separately; Gemma-based recommendations will be added after these data sources are working.'}</p></div>}
+    {photoPreview && <div className="nearby-photo-lightbox" role="dialog" aria-modal="true" aria-label={`Photo of ${photoPreview.scientificName}`} onClick={() => setPhotoPreview(null)}>
+      <div className="nearby-photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+        <button className="nearby-photo-lightbox-close" type="button" aria-label="Close enlarged photo" onClick={() => setPhotoPreview(null)}><X size={21} /></button>
+        <img src={photoPreview.url} alt={`Expanded photo associated with ${photoPreview.scientificName}`} onError={() => setPhotoPreview(null)} />
+        <div className="nearby-photo-lightbox-caption"><strong>{photoPreview.scientificName}</strong>{photoPreview.commonName && <span>{photoPreview.commonName}</span>}<small>{nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoSource === 'iNaturalist taxon photo' ? 'Reference photo from iNaturalist for this taxon; it may not depict the individual recorded by GBIF.' : 'Image supplied with a GBIF occurrence record; identification may require independent verification.'}{nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoAttribution ? ` Attribution: ${nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoAttribution}` : ''}</small></div>
+      </div>
+    </div>}
+    <p className="modal-text" style={{ fontSize: 12, marginTop: 14 }}>GBIF records show documented observations, not guaranteed current sightings. Photo licenses and attribution may vary by record.</p>
+  </div>
+}
 
 
 
@@ -465,11 +746,11 @@ function formatFoundDate(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function Compendium({ onOpen, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; items: SpeciesItem[] }) { const [query, setQuery] = useState(''); const shown = items.filter((s) => `${s.name} ${s.latin} ${s.category}`.toLowerCase().includes(query.toLowerCase())); const acceptedPoints = items.filter((item) => item.status !== 'Demonstration entry' && item.identificationStatus !== 'pending' && item.identificationStatus !== 'failed').reduce((total, item) => total + item.points, 0); const discoveriesThisMonth = items.filter((item) => item.dateFound && new Date(item.dateFound).getMonth() === new Date().getMonth() && new Date(item.dateFound).getFullYear() === new Date().getFullYear()).length; return <div className="screen"><div className="page-title collection-title"><div><p className="eyebrow">YOUR FIELD GUIDE</p><h1>Compendium</h1></div><div className="collection-count"><strong>{items.length}</strong><span>species entries</span></div></div><div className="collection-stats"><div><strong>{acceptedPoints}</strong><span>recorded points</span></div><div><strong>{items.length}</strong><span>field notes</span></div><div><strong>{discoveriesThisMonth}</strong><span>added this month</span></div></div><div className="searchbox"><Search size={18} /><input aria-label="Search compendium" placeholder="Search species" value={query} onChange={(e) => setQuery(e.target.value)} /></div><div className="filter-row"><button className="filter active">All</button><button className="filter">Birds</button><button className="filter">Plants</button><button className="filter">Insects</button></div><div className="species-grid">{shown.map((item) => <button className={`species-card rarity-${item.rarity.toLowerCase().replace(' ', '-')}`} key={item.name} onClick={() => onOpen('species', item)}><div className="species-photo"><img src={item.image} alt={item.name} /><span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div><div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div><div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.status === 'Demonstration entry' ? 'Demo' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>{item.dateFound ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}>Found: {formatFoundDate(item.dateFound)}</p> : item.status === 'Demonstration entry' ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#936639' }}>Demonstration entry</p> : null}</button>)}</div></div> }
+function Compendium({ onOpen, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; items: SpeciesItem[] }) { const [query, setQuery] = useState(''); const shown = items.filter((s) => `${s.name} ${s.latin} ${s.category}`.toLowerCase().includes(query.toLowerCase())); const acceptedPoints = items.filter((item) => item.status !== 'Demonstration entry' && item.identificationStatus !== 'pending' && item.identificationStatus !== 'failed').reduce((total, item) => total + item.points, 0); const discoveriesThisMonth = items.filter((item) => item.dateFound && new Date(item.dateFound).getMonth() === new Date().getMonth() && new Date(item.dateFound).getFullYear() === new Date().getFullYear()).length; return <div className="screen"><div className="page-title collection-title"><div><p className="eyebrow">YOUR FIELD GUIDE</p><h1>Compendium</h1></div><div className="collection-count"><strong>{items.length}</strong><span>species entries</span></div></div><div className="collection-stats"><div><strong>{acceptedPoints}</strong><span>recorded points</span></div><div><strong>{items.length}</strong><span>field notes</span></div><div><strong>{discoveriesThisMonth}</strong><span>added this month</span></div></div><div className="searchbox"><Search size={18} /><input aria-label="Search compendium" placeholder="Search species" value={query} onChange={(e) => setQuery(e.target.value)} /></div><div className="filter-row"><button className="filter active">All</button><button className="filter">Birds</button><button className="filter">Plants</button><button className="filter">Insects</button></div><div className="species-grid compendium-species-scroll">{shown.map((item, index) => <button className={`species-card rarity-${item.rarity.toLowerCase().replace(' ', '-')}`} key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`} onClick={() => onOpen('species', item)}><div className="species-photo"><img src={item.image} alt={item.name} /><span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div><div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div><div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.status === 'Demonstration entry' ? 'Demo' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>{item.dateFound ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}>Found: {formatFoundDate(item.dateFound)}</p> : item.status === 'Demonstration entry' ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#936639' }}>Demonstration entry</p> : null}</button>)}</div></div> }
 
 
 
-function Community() { return <div className="screen"><div className="page-title"><p className="eyebrow">THE WILD AROUND US</p><h1>Community</h1><p>Shared discoveries from a demonstration community.</p></div><div className="leaderboard-card"><div className="leader-head"><div><span className="eyebrow light">THIS WEEK</span><h2>Field notes leaderboard</h2></div><Trophy size={25} /></div><div className="leader-row you"><span className="rank">01</span><span className="community-avatar">AM</span><div><strong>Alex Morgan <small>YOU</small></strong><span>12 species discovered</span></div><b>65 pts</b></div>{['Maya Chen', 'Theo Williams', 'Samira Patel'].map((name, i) => <div className="leader-row" key={name}><span className="rank">0{i + 2}</span><span className="community-avatar muted">{name.split(' ').map(n => n[0]).join('')}</span><div><strong>{name} <small>DEMO</small></strong><span>{10 - i * 2} species discovered</span></div><b>{58 - i * 11} pts</b></div>)}</div><div className="section-heading compact"><div><p className="eyebrow">FROM THE COMMUNITY</p><h2>Recent discoveries</h2></div><button className="icon-button"><MoreHorizontal size={19} /></button></div><div className="community-grid">{species.slice(0, 3).map((item) => <div className="community-photo" key={item.name}><img src={item.image} alt={item.name} /><div><strong>{item.name}</strong><span>Shared by demo explorer</span></div></div>)}</div></div> }
+function Community() { return <div className="screen"><div className="page-title"><p className="eyebrow">THE WILD AROUND US</p><h1>Community</h1><p>Shared discoveries from a demonstration community.</p></div><div className="leaderboard-card"><div className="leader-head"><div><span className="eyebrow light">THIS WEEK</span><h2>Field notes leaderboard</h2></div><Trophy size={25} /></div><div className="leader-row you"><span className="rank">01</span><span className="community-avatar">AM</span><div><strong>Alex Morgan <small>YOU</small></strong><span>12 species discovered</span></div><b>65 pts</b></div>{['Maya Chen', 'Theo Williams', 'Samira Patel'].map((name, i) => <div className="leader-row" key={name}><span className="rank">0{i + 2}</span><span className="community-avatar muted">{name.split(' ').map(n => n[0]).join('')}</span><div><strong>{name} <small>DEMO</small></strong><span>{10 - i * 2} species discovered</span></div><b>{58 - i * 11} pts</b></div>)}</div><div className="section-heading compact"><div><p className="eyebrow">FROM THE COMMUNITY</p><h2>Recent discoveries</h2></div><button className="icon-button"><MoreHorizontal size={19} /></button></div><div className="community-grid">{species.slice(0, 3).map((item, index) => <div className="community-photo" key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`}><img src={item.image} alt={item.name} /><div><strong>{item.name}</strong><span>Shared by demo explorer</span></div></div>)}</div></div> }
 
 
 
@@ -622,7 +903,7 @@ function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: 
     <h2>{item.name}</h2>
     <em>{item.latin}</em>
     <p className="modal-text">Category: {item.category}<br />Status: {item.status || 'Unverified'}<br />Rarity: {item.rarity}<br />Points: {item.points}</p>
-    {isPending && <p className="modal-text" role="status">Gemini is still identifying this photo. You can close this entry and keep exploring; the result will update here when ready.</p>}
+    {isPending && <p className="modal-text" role="status">The AI model is still identifying this photo. You can close this entry and keep exploring; the result will update here when ready.</p>}
     {isFailed && <p className="modal-text" role="alert">Identification didn't finish. You can still add the correct name below.</p>}
     {item.dateFound && <p className="modal-text">Date found: {formatFoundDate(item.dateFound)}</p>}
     {item.locationFound && <p className="modal-text">Location: {item.locationFound}</p>}
@@ -675,6 +956,7 @@ function Modal({ kind, close, onUpdateCompendium, onIdentifyInBackground, select
 export default function Page() {
 
   const [tab, setTab] = useState<Tab>('home');
+  const [exploreTaskStatus, setExploreTaskStatus] = useState<'idle' | 'running' | 'finished'>('idle')
 
   const [modal, setModal] = useState<string | null>(null);
 
@@ -700,6 +982,13 @@ export default function Page() {
   useEffect(() => {
     questSessionRef.current = questSession
   }, [questSession])
+
+  // Keep the background-search notice only while the user is away from Explore.
+  useEffect(() => {
+    if (tab === 'explore' && exploreTaskStatus === 'finished') {
+      setExploreTaskStatus('idle')
+    }
+  }, [tab, exploreTaskStatus])
 
   useEffect(() => {
     try {
@@ -901,35 +1190,6 @@ export default function Page() {
     void enableStepTracking()
   }
 
-  function previewQuestSummary() {
-    const endedAt = Date.now()
-    const startedAt = endedAt - 42 * 60 * 1000
-    const previewItems = compendium.filter((item) => item.identificationStatus !== 'pending' && item.identificationStatus !== 'failed').slice(0, 3)
-    const chosenItems = previewItems.length ? previewItems : species.slice(0, 3)
-    const discoveries = chosenItems.map((item) => item.name)
-    const discoveryKeys = chosenItems.map((item) => speciesTaxonKey(item.name, item.latin))
-    const discoveryPointAwards = Object.fromEntries(discoveryKeys.map((key) => [key, pointsForSpeciesKey(key)]))
-    const steps = 3260
-    const entry: QuestHistoryEntry = {
-      id: `preview-${endedAt}`,
-      startedAt,
-      endedAt,
-      durationMs: endedAt - startedAt,
-      steps,
-      points: Math.min(MAX_QUEST_POINTS, walkingPoints(steps) + Object.values(discoveryPointAwards).reduce((total, value) => total + value, 0)),
-      discoveries,
-      discoveryKeys,
-      discoveryPointAwards,
-      location: questSession.location,
-      routePoints: 18,
-      distanceMeters: 2400,
-      endReason: 'manual',
-    }
-    // Preview-only data: deliberately not inserted into questHistory/localStorage.
-    setQuestCompletion(entry)
-    setTab('quests')
-  }
-
   function endQuest() {
     finishQuest(false)
   }
@@ -1053,7 +1313,7 @@ export default function Page() {
       id,
       identificationStatus: 'pending',
       name: 'Identifying…',
-      latin: 'Gemini is processing this photo',
+      latin: 'AI is processing this photo',
       category: 'Pending',
       points: 0,
       rarity: 'Unconfirmed',
@@ -1069,7 +1329,7 @@ export default function Page() {
     setBackgroundNotice('Photo saved to your Compendium. Identifying in the background…')
 
     // Save a compact image data URL for local persistence. This runs independently
-    // of the Gemini request so users aren't held up by either operation.
+    // of the AI request so users aren't held up by either operation.
     const imagePromise = makeSmallImageDataUrl(file)
       .then((image) => {
         patchCompendiumEntry(id, { image })
@@ -1086,8 +1346,32 @@ export default function Page() {
       formData.append('image', file)
       formData.append('category', 'auto')
       const response = await fetch('http://127.0.0.1:5000/identify/image', { method: 'POST', body: formData })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Gemini could not identify this photo.')
+      let data: {
+        error?: string
+        details?: string
+        species?: string
+        common_name?: string
+        scientific_name?: string
+        category?: string
+        organism_group?: string
+        predictions?: Array<{ species?: string; scientific_name?: string }>
+      }
+      try {
+        data = await response.json()
+      } catch {
+        throw new Error(`The backend returned an unreadable response (HTTP ${response.status}).`)
+      }
+      if (!response.ok) {
+        const message = data.error || `Identification failed (HTTP ${response.status}).`
+        // Preserve technical details in DevTools without turning an expected API failure
+        // into a fatal-looking Next.js console error overlay.
+        console.warn('WildQuest identification API returned an error:', {
+          status: response.status,
+          message,
+          details: data.details,
+        })
+        throw new Error(message)
+      }
 
       const firstPrediction = Array.isArray(data.predictions) ? data.predictions[0] : undefined
       const rawName = String(data.species || firstPrediction?.species || data.common_name || 'Unidentified organism')
@@ -1101,7 +1385,7 @@ export default function Page() {
 
       setCompendium((current) => current.map((entry) => {
         if (entry.id !== id) return entry
-        // Do not overwrite a correction the user made while Gemini was processing.
+        // Do not overwrite a correction the user made while the AI model was processing.
         if (entry.identificationStatus === 'corrected') {
           return { ...entry, ...(savedImage ? { image: savedImage } : {}), modelSuggestion: suggestedName }
         }
@@ -1140,8 +1424,9 @@ export default function Page() {
         }
       }))
       const message = error instanceof Error ? error.message : 'Unknown error'
-      console.error('Background identification failed:', message)
-      setBackgroundNotice('Photo saved, but identification failed. You can correct it in Compendium.')
+      console.warn('Background identification failed:', message)
+      const shortMessage = message.length > 150 ? `${message.slice(0, 147)}…` : message
+      setBackgroundNotice(`Photo saved, but identification failed: ${shortMessage}`)
     }
   }
 
@@ -1159,13 +1444,19 @@ export default function Page() {
 
         {backgroundNotice && <div className="background-toast" role="status"><span>{backgroundNotice}</span><button type="button" onClick={() => setBackgroundNotice('')} aria-label="Dismiss message"><X size={16} /></button></div>}
 
-
+        {tab !== 'explore' && exploreTaskStatus !== 'idle' && <div key={exploreTaskStatus} className="background-toast explore-background-toast" role="status" style={{ bottom: backgroundNotice ? 148 : 88 }}>
+          <span>{exploreTaskStatus === 'running' ? 'Wildlife search is running in the background. You can keep using WildQuest.' : 'Nearby wildlife search is complete. Your results are ready in Explore.'}</span>
+          <button type="button" onClick={() => setTab('explore')} aria-label="View wildlife search results" title="View Explore"><ArrowRight size={16} /></button>
+        </div>}
 
         {tab === 'home' && <Home onTab={setTab} onOpen={openModal} items={compendium} session={questSession} />}
 
         {tab === 'quests' && <Quests session={questSession} history={questHistory} stepStatus={stepStatus} locationStatus={locationStatus} items={compendium} summaryEntry={questCompletion} onStart={startQuest} onEnd={endQuest} onEnableSteps={enableStepTracking} onDismissSummary={() => setQuestCompletion(null)}/>}
 
-        {tab === 'explore' && <Explore onOpen={openModal} />}
+        {/* Keep Explore mounted while hidden so GPS, WorldCover, and GBIF requests finish and retain results across tab changes. */}
+        <div style={{ display: tab === 'explore' ? 'block' : 'none' }} aria-hidden={tab !== 'explore'}>
+          <Explore items={compendium} onSearchStatusChange={setExploreTaskStatus} />
+        </div>
 
         {tab === 'collection' && <Compendium onOpen={openModal} items={compendium} />}
 
@@ -1251,7 +1542,6 @@ export default function Page() {
 
       <style jsx global>{`
         .quest-completion-screen { padding-bottom: 28px; }
-        .quest-preview-banner { margin-bottom: 12px; border: 1px dashed #a47c4d; border-radius: 10px; padding: 9px 11px; background: #f5eddd; color: #815b32; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
         .quest-completion-hero { border-radius: 20px; padding: 24px 18px; background: #343e2a; color: #fffdf8; text-align: center; }
         .quest-completion-emblem { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 12px; border-radius: 50%; background: #a4ac86; color: #293321; font-size: 26px; font-weight: 800; }
         .quest-completion-hero .eyebrow { color: #d7c7a5; }
@@ -1277,8 +1567,21 @@ export default function Page() {
         .quest-completion-species-card small { color: #687454; font-size: 11px; font-weight: 700; }
         .quest-completion-footnote { margin: 14px 0; color: #817b6e; font-size: 11px; line-height: 1.5; }
         .quest-completion-actions { display: grid; gap: 9px; margin-top: 18px; }
-        .quest-preview-shortcut .outline-button { width: 100%; border-style: dashed; font-size: 11px; }
         .quest-session-card { margin-top: 18px; }
+        .worldcover-panel { margin-top: 16px; padding: 15px; border: 1px solid #e6dfd1; border-radius: 16px; background: #fffdf8; }
+        .worldcover-panel .section-heading { margin-top: 0; }
+        .worldcover-radius { flex: 0 0 auto; padding: 6px 9px; border-radius: 99px; background: #e8eadf; color: #536143; font-size: 10px; font-weight: 800; }
+        .worldcover-intro { margin: 0 0 12px; color: #817b6e; font-size: 12px; line-height: 1.45; }
+        .worldcover-class { margin-top: 12px; }
+        .worldcover-class-heading { display: flex; align-items: center; gap: 9px; }
+        .worldcover-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+        .worldcover-class-label { display: grid; flex: 1; gap: 2px; min-width: 0; }
+        .worldcover-class-label strong { color: #303a27; font-size: 13px; }
+        .worldcover-class-label small { color: #817b6e; font-size: 10px; }
+        .worldcover-class-heading > b { color: #303a27; font-size: 12px; }
+        .worldcover-bar { overflow: hidden; height: 5px; margin: 7px 0 0 19px; border-radius: 99px; background: #ede9df; }
+        .worldcover-bar > span { display: block; height: 100%; border-radius: inherit; }
+        .worldcover-attribution { margin: 14px 0 0; color: #817b6e; font-size: 10px; line-height: 1.5; }
         .quest-view-switch { margin-top: 14px; }
         .quest-history-list { display: grid; gap: 14px; }
         .quest-history-empty, .quest-history-card { border: 1px solid #e6dfd1; border-radius: 16px; padding: 16px; background: #fffdf8; }
@@ -1325,7 +1628,79 @@ export default function Page() {
         .quest-rank-list { display: grid; gap: 10px; }
         .quest-rank-list > div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #e6dfd1; border-radius: 12px; background: #fffdf8; }
         .quest-rank-list span { color: #817b6e; font-size: 12px; }
+        .explore-map-card { overflow: hidden; }
+        .explore-loading-panel { position: relative; display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: center; gap: 12px; margin-top: 14px; padding: 15px; overflow: hidden; border: 1px solid #dfe3d1; border-radius: 16px; background: linear-gradient(135deg, #fffdf8, #f0f1e6); }
+        .explore-loading-visual { position: relative; display: grid; place-items: center; width: 54px; height: 54px; }
+        .explore-loading-ring { position: absolute; inset: 0; border: 3px solid #e2e5d7; border-top-color: #65764e; border-right-color: #a4ac86; border-radius: 50%; animation: explore-spin .9s linear infinite; }
+        .explore-loading-leaf { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #586548; background: #e9ecdf; animation: explore-breathe 1.8s ease-in-out infinite; }
+        .explore-loading-copy { display: grid; min-width: 0; gap: 4px; }
+        .explore-loading-copy .eyebrow { margin: 0; font-size: 9px; }
+        .explore-loading-copy h3 { margin: 0; color: #303a27; font-size: 14px; line-height: 1.35; }
+        .explore-loading-copy p:last-child { margin: 0; color: #777668; font-size: 11px; line-height: 1.5; }
+        .explore-loading-progress { display: flex; grid-column: 1 / -1; gap: 5px; height: 4px; overflow: hidden; border-radius: 99px; background: #e7e5db; }
+        .explore-loading-progress span { flex: 1; border-radius: inherit; background: #a4ac86; transform-origin: left; animation: explore-progress 1.3s ease-in-out infinite; }
+        .explore-loading-progress span:nth-child(2) { animation-delay: .18s; }
+        .explore-loading-progress span:nth-child(3) { animation-delay: .36s; }
+        @keyframes explore-spin { to { transform: rotate(360deg); } }
+        @keyframes explore-breathe { 0%, 100% { transform: scale(.92); opacity: .75; } 50% { transform: scale(1.04); opacity: 1; } }
+        @keyframes explore-progress { 0%, 100% { opacity: .35; transform: scaleX(.55); } 50% { opacity: 1; transform: scaleX(1); } }
+        @media (prefers-reduced-motion: reduce) { .explore-loading-ring, .explore-loading-leaf, .explore-loading-progress span { animation: none; } }
+        .explore-map-wrap { position: relative; width: 100%; height: clamp(210px, 58vw, 310px); overflow: hidden; background: #e6e8d8; }
+        .explore-map-iframe { display: block; width: 100%; height: 100%; border: 0; background: #e6e8d8; }
+        .explore-map-empty { display: flex; width: 100%; height: 100%; min-height: 210px; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 24px; color: #526044; text-align: center; background: radial-gradient(circle at 22% 22%, #d3d9bd 0 12%, transparent 13%), radial-gradient(circle at 78% 70%, #c6d0b3 0 18%, transparent 19%), #e7e9d9; }
+        .explore-map-empty-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #34402b; color: #fffdf8; }
+        .explore-map-empty strong { color: #303a27; font-size: 14px; }
+        .explore-map-empty > span:last-child { max-width: 260px; color: #6e7460; font-size: 12px; line-height: 1.5; }
+        .explore-open-map { display: inline-flex; align-items: center; gap: 5px; margin: 0 15px 13px; color: #586548; font-size: 11px; font-weight: 700; text-decoration: none; }
+        .combined-context-panel { display: grid; gap: 12px; margin: 16px 0; padding: 15px; border: 1px solid #dfe2d0; border-radius: 15px; background: linear-gradient(145deg, #f0f1e7, #fffdf8 72%); }
+        .combined-context-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .combined-context-heading h2 { margin: 2px 0 0; color: #303a27; font-size: 16px; font-weight: 700; }
+        .combined-context-badge { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; background: #e2e7d5; color: #586548; font-size: 9px; font-weight: 750; }
+        .combined-context-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+        .combined-context-stats > div { display: grid; align-content: start; gap: 5px; padding: 10px; border: 1px solid #e7e5d9; border-radius: 10px; background: rgba(255,253,248,.8); }
+        .combined-context-stats span, .combined-context-label { color: #817b6e; font-size: 10px; line-height: 1.4; }
+        .combined-context-stats strong { color: #303a27; font-size: 13px; line-height: 1.35; }
+        .combined-context-habitats { display: grid; gap: 7px; }
+        .combined-context-habitats > div { display: flex; flex-wrap: wrap; gap: 6px; }
+        .combined-context-habitats > div > span { padding: 5px 8px; border-radius: 99px; background: #e9eadf; color: #596548; font-size: 10px; }
+        .combined-context-note { margin: 0; color: #817b6e; font-size: 10px; line-height: 1.5; }
+        @media (max-width: 380px) { .combined-context-heading { align-items: flex-start; flex-direction: column; } }
+        .nearby-species-list { display: grid; gap: 0; margin-top: 4px; }
+        .nearby-species-card { border-bottom: 1px solid #e6dfd1; }
+        .nearby-species-row { display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; padding: 12px 0; }
+        .nearby-species-photo-button { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 64px; padding: 0; border: 0; overflow: hidden; border-radius: 10px; background: #e8eadf; cursor: zoom-in; }
+        .nearby-species-photo-button > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .nearby-photo-expand-hint { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 23px; height: 23px; border-radius: 7px; background: rgba(38, 47, 31, .82); color: #fffdf8; opacity: .92; }
+        .nearby-species-thumb { display: grid; flex: 0 0 64px; place-items: center; width: 64px; height: 64px; border-radius: 10px; color: #687454; background: #e8eadf; }
+        .nearby-species-trigger { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+        .nearby-species-trigger:focus-visible, .nearby-species-photo-button:focus-visible { outline: 2px solid #78865b; outline-offset: 3px; border-radius: 8px; }
+        .nearby-species-main { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 3px; }
+        .nearby-species-main .rarity { font-size: 9px; line-height: 1.4; }
+        .nearby-species-main > strong { max-width: 100%; overflow-wrap: anywhere; color: #303a27; font-size: 14px; line-height: 1.3; }
+        .nearby-species-main > em { max-width: 100%; overflow-wrap: anywhere; color: #817b6e; font-size: 11px; font-style: normal; line-height: 1.35; }
+        .nearby-species-main > small { color: #817b6e; font-size: 10px; }
+        .nearby-priority-label { display: inline-flex; margin-top: 2px; padding: 3px 7px; border-radius: 99px; background: #e9eadf; color: #596548; font-size: 9px; font-weight: 700; }
+        .nearby-species-chevron { flex: 0 0 auto; color: #596548; transition: transform .18s ease; }
+        .nearby-species-trigger[aria-expanded="true"] .nearby-species-chevron { transform: rotate(90deg); }
+        .nearby-species-details { display: grid; gap: 10px; margin: 0 0 12px 76px; padding: 12px; border: 1px solid #e6dfd1; border-radius: 12px; background: #fffdf8; }
+        .nearby-species-details > div { display: grid; gap: 3px; min-width: 0; }
+        .nearby-species-details > div > span { color: #817b6e; font-size: 10px; }
+        .nearby-species-details > div > strong { overflow-wrap: anywhere; color: #303a27; font-size: 12px; font-weight: 650; }
+        .nearby-species-details > p { margin: 0; color: #817b6e; font-size: 11px; line-height: 1.45; }
+        .nearby-species-details > a, .nearby-detail-photo-link { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: #586548; font-size: 11px; font-weight: 750; text-decoration: none; }
+        .nearby-detail-photo-link { width: fit-content; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+        .nearby-photo-lightbox { position: fixed; z-index: 2200; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(20, 25, 18, .82); backdrop-filter: blur(5px); }
+        .nearby-photo-lightbox-panel { position: relative; display: flex; flex-direction: column; width: min(100%, 760px); max-height: min(92vh, 900px); overflow: hidden; border-radius: 16px; background: #fffdf8; box-shadow: 0 22px 80px rgba(0,0,0,.3); }
+        .nearby-photo-lightbox-panel > img { display: block; width: 100%; max-height: 70vh; object-fit: contain; background: #171a15; }
+        .nearby-photo-lightbox-close { position: absolute; z-index: 1; top: 10px; right: 10px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid rgba(255,255,255,.5); border-radius: 50%; background: rgba(33,40,28,.85); color: #fffdf8; cursor: pointer; }
+        .nearby-photo-lightbox-caption { display: grid; gap: 4px; padding: 14px 16px 16px; }
+        .nearby-photo-lightbox-caption > strong { color: #303a27; font-size: 15px; font-style: italic; }
+        .nearby-photo-lightbox-caption > span { color: #687454; font-size: 12px; }
+        .nearby-photo-lightbox-caption > small { color: #817b6e; font-size: 10px; line-height: 1.5; }
+        @media (max-width: 380px) { .nearby-species-details { margin-left: 0; } .nearby-species-photo-button, .nearby-species-thumb { flex-basis: 56px; width: 56px; height: 56px; } .nearby-photo-lightbox { padding: 10px; } }
         .background-toast { position: fixed; z-index: 1000; left: 50%; bottom: 88px; transform: translateX(-50%); width: min(92vw, 390px); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #343e2a; color: #fffdf8; box-shadow: 0 8px 26px rgba(0,0,0,.22); font-size: 13px; line-height: 1.4; }
+        .explore-background-toast { animation: explore-toast-dismiss 4s ease forwards; }
+        @keyframes explore-toast-dismiss { 0%, 78% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 8px); } }
         .background-toast button { flex: 0 0 auto; display: grid; place-items: center; border: 0; background: transparent; color: inherit; padding: 4px; }
         /* Remove the translucent circular decoration covering compendium photos. */
         .species-photo::before,
@@ -1337,6 +1712,11 @@ export default function Page() {
           opacity: 1 !important;
           filter: none !important;
         }
+        /* Compendium: horizontal, swipeable card shelf instead of a long vertical grid. */
+        .compendium-species-scroll { display: flex !important; flex-wrap: nowrap; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 14px; margin: 0 -2px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #a4ac86 transparent; }
+        .compendium-species-scroll .species-card { flex: 0 0 min(72%, 260px); width: min(72%, 260px); min-width: 0; scroll-snap-align: start; }
+        .compendium-species-scroll .species-photo { height: 174px; }
+        @media (min-width: 700px) { .compendium-species-scroll .species-card { flex-basis: 250px; width: 250px; } }
       `}</style>
 
     </main>
