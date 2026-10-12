@@ -14,7 +14,10 @@ import {
 
   Award,
 
-  Bell,
+  Bird,
+  Binoculars,
+  CalendarDays,
+  ChevronLeft,
 
 
   BookOpen,
@@ -39,7 +42,6 @@ import {
 
 
 
-  MoreHorizontal,
 
   RefreshCw,
 
@@ -64,7 +66,17 @@ import {
 
 type Tab = 'home' | 'quests' | 'explore' | 'collection' | 'community'
 
+type SpeciesObservation = {
+  id?: string
+  dateFound?: string
+  locationFound?: string
+  notes?: string
+  image?: string
+  status?: string
+}
+
 type SpeciesItem = {
+  observations?: SpeciesObservation[]
   id?: string
   identificationStatus?: 'pending' | 'complete' | 'failed' | 'corrected'
   name: string
@@ -81,20 +93,6 @@ type SpeciesItem = {
   correctionNotes?: string
 }
 
-const species: SpeciesItem[] = [
-
-  { name: 'European Robin', latin: 'Erithacus rubecula', category: 'Bird', points: 20, rarity: 'Uncommon', status: 'Demonstration entry', image: 'https://images.unsplash.com/photo-1555169062-013468b47731?auto=format&fit=crop&w=600&q=85' },
-
-  { name: 'Field Poppy', latin: 'Papaver rhoeas', category: 'Plant', points: 10, rarity: 'Common', status: 'Demonstration entry', image: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=600&q=85' },
-
-  { name: 'Common Blue', latin: 'Polyommatus icarus', category: 'Insect', points: 35, rarity: 'Rare', status: 'Demonstration entry', image: 'https://images.unsplash.com/photo-1473445361085-b9a07f55608b?auto=format&fit=crop&w=600&q=85' },
-
-  { name: 'Atlantic Salmon', latin: 'Salmo salar', category: 'Fish', points: 35, rarity: 'Rare', status: 'Demonstration entry', image: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&w=600&q=85' },
-
-]
-
-
-
 const quests = [
 
   { title: 'Wildlife Explorer', desc: 'Slow down, look closer, and discover the living world around you.', icon: Leaf, color: '#a4ac86', image: 'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=900&q=85', progress: '65 / 150 pts', habitats: 'Woodland · Meadows · Wetlands' },
@@ -110,15 +108,17 @@ const quests = [
 
 
 function Header({ onProfile }: { onProfile: () => void }) {
-
-  return <header className="topbar"><div className="brand"><span className="brand-mark"><Leaf size={17} strokeWidth={2.5} /></span><span>WildQuest</span></div><div className="header-actions"><button className="icon-button" aria-label="Notifications"><Bell size={19} /></button><button className="avatar" onClick={onProfile} aria-label="Open profile">AM</button></div></header>
-
+  return <header className="topbar">
+    <div className="brand"><span className="brand-mark"><Leaf size={17} strokeWidth={2.5} /></span><span>WildQuest</span></div>
+    <div className="header-actions"><button className="avatar" onClick={onProfile} aria-label="Open dev_sj profile" title="Open dev_sj profile">DS</button></div>
+  </header>
 }
 
 
 
 function Home({ onTab, onOpen, items, session }: { onTab: (tab: Tab) => void; onOpen: (kind: string) => void; items: SpeciesItem[]; session: QuestSession }) {
-  const recentItems = [...items].slice(0, 3)
+  const recentItems = items.filter((item) => item.status !== 'Demonstration entry' && item.identificationStatus !== 'failed')
+    .slice(0, 3)
   const [greeting, setGreeting] = useState('Welcome back')
   const [dateLabel, setDateLabel] = useState('YOUR FIELD ADVENTURE')
 
@@ -126,16 +126,15 @@ function Home({ onTab, onOpen, items, session }: { onTab: (tab: Tab) => void; on
     const now = new Date()
     const hour = now.getHours()
     setGreeting(hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening')
-    setDateLabel(now.toLocaleDateString('en-GB', {
-      weekday: 'long', day: 'numeric', month: 'long',
-    }).toUpperCase())
+    setDateLabel(now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase())
   }, [])
+
   const activePoints = session.active ? sessionPoints(session) : 0
   const activeRank = activePoints >= 300 ? 'NATURE GUARDIAN' : activePoints >= 150 ? 'WILD EXPLORER' : activePoints >= 50 ? 'TRAIL SCOUT' : 'FIELD SESSION'
   const activePercent = Math.min(100, (activePoints / MAX_QUEST_POINTS) * 100)
-  return <div className="screen">
 
-    <section className="intro"><p className="eyebrow">{dateLabel}</p><h1>{greeting}, explorer.</h1><div className="location"><MapPin size={14} />{session.location ? ` ${session.location.latitude.toFixed(4)}, ${session.location.longitude.toFixed(4)} · GPS` : session.active ? ` ${'Waiting for GPS location'}` : ` Location tracked during a quest`}</div></section>
+  return <div className="screen">
+    <section className="intro"><p className="eyebrow">{dateLabel}</p><h1>{greeting}, explorer.</h1><div className="location"><MapPin size={14} />{session.location ? ` ${session.location.latitude.toFixed(4)}, ${session.location.longitude.toFixed(4)} · GPS` : session.active ? ' Waiting for GPS location' : ' Location tracked during a quest'}</div></section>
 
     <section className="progress-card"><div className="progress-top"><div><span className="eyebrow light">{session.active ? 'ACTIVE FIELD QUEST' : 'YOUR NEXT ADVENTURE'}</span><h2>{activePoints} <small>/ {MAX_QUEST_POINTS} pts</small></h2></div><div className="difficulty">{session.active ? activeRank : 'NOT STARTED'} <ChevronRight size={14} /></div></div><div className="progress-track"><span style={{ width: `${activePercent}%` }} /></div><div className="progress-bottom"><span>{Math.max(0, MAX_QUEST_POINTS - activePoints)} points to Nature Guardian</span><span>{session.active ? `${session.steps.toLocaleString()} steps` : 'Start to begin tracking'}</span></div></section>
 
@@ -143,14 +142,11 @@ function Home({ onTab, onOpen, items, session }: { onTab: (tab: Tab) => void; on
 
     <section className="section-block"><div className="section-heading"><div><p className="eyebrow">CAPTURE A MOMENT</p><h2>Make a discovery</h2></div></div><div className="action-grid"><button className="action-card" onClick={() => onOpen('photo')}><span className="action-icon sage"><Camera size={21} /></span><span><strong>Photograph</strong><small>Identify a species</small></span><ArrowRight size={16} /></button></div></section>
 
-    <section className="section-block"><div className="section-heading"><div><p className="eyebrow">NEARBY, DEMONSTRATION</p><h2>Worth a closer look</h2></div><button className="text-link" onClick={() => onTab('explore')}>Explore <ArrowRight size={15} /></button></div><div className="recommendation"><img src={species[0].image} alt="European robin perched on a branch" /><div><span className="rarity">UNCOMMON · 20 PTS</span><h3>European Robin</h3><p>Often found in woodland edges and quiet gardens.</p><button className="outline-button" onClick={() => onTab('explore')}>Where should I look?</button></div></div></section>
+    <section className="section-block"><div className="section-heading"><div><p className="eyebrow">LOCAL BIODIVERSITY</p><h2>Explore nearby species</h2></div><button className="text-link" onClick={() => onTab('explore')}>Open Explore <ArrowRight size={15} /></button></div><div className="active-quest home-explore-banner"><img src="https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1100&q=85" alt="Wild deer in a green woodland" onError={(event) => { event.currentTarget.style.opacity = '0.25' }} /><div className="quest-overlay"><span className="pill">EXPLORE LOCAL WILDLIFE</span><h3>Find what lives around you.</h3><p>Use your location to explore nearby birds, wild mammals, butterflies, reptiles and other wildlife supported by local records.</p><button className="cream-button" onClick={() => onTab('explore')}>Find nearby wildlife <ArrowRight size={15} /></button></div></div></section>
 
-    <section className="section-block collection-strip"><div className="section-heading"><div><p className="eyebrow">YOUR COMPENDIUM</p><h2>Recently added</h2></div><button className="text-link" onClick={() => onTab('collection')}>Open compendium <ArrowRight size={15} /></button></div><div className="mini-row">{recentItems.map((item, index) => <button className="mini-card" key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`} onClick={() => onTab('collection')}><img src={item.image} alt={item.name} /><span>{item.name}</span></button>)}</div></section>
-
+    <section className="section-block collection-strip"><div className="section-heading"><div><p className="eyebrow">YOUR COMPENDIUM</p><h2>Recently added</h2></div><button className="text-link" onClick={() => onTab('collection')}>Open compendium <ArrowRight size={15} /></button></div>{recentItems.length ? <div className="mini-row">{recentItems.map((item, index) => <button className="mini-card" key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`} onClick={() => onTab('collection')}><img src={item.image} alt={item.name} /><span>{item.name}</span></button>)}</div> : <div className="home-compendium-empty"><BookOpen size={18} /><span>Your discovered animals will appear here.</span><button className="text-link" onClick={() => onTab('collection')}>Open Compendium <ArrowRight size={14} /></button></div>}</section>
   </div>
-
 }
-
 
 
 type LocationPoint = {
@@ -466,9 +462,14 @@ type NearbySpecies = {
   priorityLabel?: string
   nearbyRecordCount?: number
   taxonGroup?: string
+  taxonClass?: string
+  taxonOrder?: string
+  taxonFamily?: string
+  distanceKm?: number
   isInsect?: boolean
   isCoastalWildlife?: boolean
   recommendationReason?: string
+  whereToLook?: string
 }
 
 type WorldCoverClass = {
@@ -491,15 +492,279 @@ type NearbyHabitat = {
   note: string
 }
 
+type ExploreServiceStatus = 'waiting' | 'running' | 'success' | 'failed' | 'fallback' | 'skipped' | 'partial'
+type ExploreSourceChecks = {
+  hasRun: boolean
+  esaStatus: ExploreServiceStatus
+  gbifStatus: ExploreServiceStatus
+  gemmaStatus: ExploreServiceStatus
+  candidatePoolCount: number
+  recordsFetched: number
+  gemmaCandidateCount: number
+  gemmaReturnedCount: number
+  gemmaDisplayedCount: number
+  modelName: string
+  coastalLocation: boolean | null
+  rankingMode: string
+  partialGbif: boolean
+}
+
+function friendlyPriorityLabel(label?: string) {
+  if (!label) return ''
+  const value = label.toLocaleLowerCase()
+  if (value.includes('few records')) return 'Less often recorded nearby'
+  if (value.includes('coastal') || value.includes('marine-linked')) return 'Coastal wildlife'
+  return label
+}
+
 const worldCoverColors: Record<number, string> = {
   10: '#587b4e', 20: '#a7a86f', 30: '#c6ce8b', 40: '#d7b85c', 50: '#9b7770',
   60: '#c8b9a1', 70: '#d8e5e7', 80: '#83b7c7', 90: '#6d9c8b', 95: '#4d8377', 100: '#a8b58c',
 }
 
+type EventSpeciesTarget = {
+  id: string
+  name: string
+  scientificName: string
+  wikiTitle: string
+  group: 'Bird' | 'Mammal'
+}
+
+type ExploreEventReadMore = {
+  heading: string
+  intro: string
+  birdEstimate: string
+  speciesEstimate: string
+  whyTheyCome: string
+  wetlandImportance: string
+  threats: { title: string; description: string }[]
+  visitorActions: string[]
+  sources: { label: string; url: string }[]
+}
+
+type ExploreEvent = {
+  id: string
+  title: string
+  quote: string
+  eyebrow: string
+  destination: string
+  season: string
+  summary: string
+  heroWikiTitle: string
+  heroImage: string
+  heroFallback: string
+  accent: string
+  species: EventSpeciesTarget[]
+  sourceUrl: string
+  sourceLabel: string
+  readMore?: ExploreEventReadMore
+}
+
+// Keep events data-driven: future event pages can be added by appending another
+// object here, with its own target list and hero details. Chilika target species
+// are examples documented by Odisha Tourism, not guarantees of current sightings.
+const EXPLORE_EVENTS: ExploreEvent[] = [
+  {
+    id: 'chilika-migration',
+    title: 'The Great Winged Passage',
+    quote: 'Some journeys are measured in miles. Others are written across the sky.',
+    eyebrow: 'SEASONAL FIELD EVENT',
+    destination: 'Chilika Lake · Odisha, India',
+    season: 'Winter · November to February',
+    summary: 'Follow the winter arrival of waterbirds across shimmering lagoon, reed beds and open mudflats. Look closely, move gently, and see how many travellers you can recognise.',
+    heroWikiTitle: 'Chilika Lake',
+    heroImage: 'https://odishatourism.gov.in/content/dam/tourism/home/chilka-bird-festival/gallery/Chilika%20Birds%20%286%29.jpg',
+    heroFallback: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1400&q=85',
+    accent: '#b7d4a0',
+    sourceUrl: 'https://odishatourism.gov.in/en/national-chilika-bird-festival',
+    sourceLabel: 'Odisha Tourism · National Chilika Bird Festival',
+    readMore: {
+      heading: 'A winter refuge written across the sky',
+      intro: 'Every winter, Chilika becomes a stopping place for birds travelling long distances from Arctic regions, Central Asia and other parts of the northern hemisphere. The lagoon is not just a beautiful view: it is a place to rest, feed and build up energy before the next leg of a seasonal journey.',
+      birdEstimate: 'Nearly 1 million',
+      speciesEstimate: '200+ bird species',
+      whyTheyCome: 'As temperatures drop farther north, migratory birds move towards milder wintering grounds. Chilika offers a rich mixture of shallow water, mudflats, marshes, reed beds and open lagoon where different birds can forage on fish, small aquatic animals, invertebrates and plant material. Different species use different parts of this changing wetland.',
+      wetlandImportance: 'Chilika is a brackish-water lagoon and a wetland of international importance. Its connected habitats support migratory and resident birds, fisheries and local livelihoods. Protecting the lagoon means protecting the feeding and resting places that make the migration possible.',
+      threats: [
+        { title: 'Hunting and disturbance', description: 'Illegal hunting and people getting too close can injure birds or interrupt feeding and resting, especially when they are gathered in large flocks.' },
+        { title: 'Pollution and declining water quality', description: 'Waste and polluted water can harm the wetland food web that birds depend on.' },
+        { title: 'Siltation and habitat change', description: 'Sediment build-up and changes to the lagoon can alter the shallow-water and mudflat habitats used by feeding birds.' },
+        { title: 'Invasive weed growth', description: 'Excessive weed growth can change open-water and wetland habitat, affecting how wildlife uses the lagoon.' },
+      ],
+      visitorActions: [
+        'Watch quietly from a respectful distance; never chase, surround or flush a flock into flight.',
+        'Do not feed birds or use flash close to wildlife. Keep noise low and follow the guide’s directions.',
+        'Stay in permitted routes and boats, keep litter with you, and avoid nesting or roosting areas.',
+        'Report suspected hunting or wildlife harm to local authorities rather than confronting anyone yourself.',
+      ],
+      sources: [
+        { label: 'Odisha Tourism · National Chilika Bird Festival', url: 'https://odishatourism.gov.in/en/national-chilika-bird-festival' },
+        { label: 'Ramsar Advisory Mission · Chilika Lake', url: 'https://rsis.ramsar.org/RISapp/files/RAM/RAM_050_IN_en.pdf' },
+        { label: 'Chilika Development Authority · Environment', url: 'https://www.chilika.com/environments.php' },
+      ],
+    },
+    species: [
+      { id: 'greater-flamingo', name: 'Greater Flamingo', scientificName: 'Phoenicopterus roseus', wikiTitle: 'Greater flamingo', group: 'Bird' },
+      { id: 'black-tailed-godwit', name: 'Black-tailed Godwit', scientificName: 'Limosa limosa', wikiTitle: 'Black-tailed godwit', group: 'Bird' },
+      { id: 'grey-headed-lapwing', name: 'Grey-headed Lapwing', scientificName: 'Vanellus cinereus', wikiTitle: 'Grey-headed lapwing', group: 'Bird' },
+      { id: 'greater-painted-snipe', name: 'Greater Painted-snipe', scientificName: 'Rostratula benghalensis', wikiTitle: 'Greater painted-snipe', group: 'Bird' },
+      { id: 'eurasian-wigeon', name: 'Eurasian Wigeon', scientificName: 'Mareca penelope', wikiTitle: 'Eurasian wigeon', group: 'Bird' },
+      { id: 'northern-shoveler', name: 'Northern Shoveler', scientificName: 'Spatula clypeata', wikiTitle: 'Northern shoveler', group: 'Bird' },
+      { id: 'gadwall', name: 'Gadwall', scientificName: 'Mareca strepera', wikiTitle: 'Gadwall', group: 'Bird' },
+      { id: 'ruff', name: 'Ruff', scientificName: 'Calidris pugnax', wikiTitle: 'Ruff (bird)', group: 'Bird' },
+      { id: 'ruddy-shelduck', name: 'Ruddy Shelduck', scientificName: 'Tadorna ferruginea', wikiTitle: 'Ruddy shelduck', group: 'Bird' },
+      { id: 'common-teal', name: 'Common Teal', scientificName: 'Anas crecca', wikiTitle: 'Eurasian teal', group: 'Bird' },
+      { id: 'eurasian-curlew', name: 'Eurasian Curlew', scientificName: 'Numenius arquata', wikiTitle: 'Eurasian curlew', group: 'Bird' },
+      { id: 'curlew-sandpiper', name: 'Curlew Sandpiper', scientificName: 'Calidris ferruginea', wikiTitle: 'Curlew sandpiper', group: 'Bird' },
+      { id: 'asian-dowitcher', name: 'Asian Dowitcher', scientificName: 'Limnodromus semipalmatus', wikiTitle: 'Asian dowitcher', group: 'Bird' },
+      { id: 'pacific-golden-plover', name: 'Pacific Golden Plover', scientificName: 'Pluvialis fulva', wikiTitle: 'Pacific golden plover', group: 'Bird' },
+      { id: 'brown-headed-gull', name: 'Brown-headed Gull', scientificName: 'Chroicocephalus brunnicephalus', wikiTitle: 'Brown-headed gull', group: 'Bird' },
+      { id: 'oriental-darter', name: 'Oriental Darter', scientificName: 'Anhinga melanogaster', wikiTitle: 'Oriental darter', group: 'Bird' },
+      { id: 'painted-stork', name: 'Painted Stork', scientificName: 'Mycteria leucocephala', wikiTitle: 'Painted stork', group: 'Bird' },
+      { id: 'black-headed-ibis', name: 'Black-headed Ibis', scientificName: 'Threskiornis melanocephalus', wikiTitle: 'Black-headed ibis', group: 'Bird' },
+      { id: 'spot-billed-pelican', name: 'Spot-billed Pelican', scientificName: 'Pelecanus philippensis', wikiTitle: 'Spot-billed pelican', group: 'Bird' },
+      { id: 'oriental-pratincole', name: 'Oriental Pratincole', scientificName: 'Glareola maldivarum', wikiTitle: 'Oriental pratincole', group: 'Bird' },
+      { id: 'great-knot', name: 'Great Knot', scientificName: 'Calidris tenuirostris', wikiTitle: 'Great knot', group: 'Bird' },
+    ],
+  },
+]
+
+function normalizeWikiTitle(value: string) {
+  return value.replace(/_/g, ' ').trim().toLocaleLowerCase()
+}
+
+function ExploreEventCard({ event, onOpen }: { event: ExploreEvent; onOpen: (id: string) => void }) {
+  const [heroImage, setHeroImage] = useState(event.heroImage)
+  return <button className="event-featured-card" type="button" onClick={() => onOpen(event.id)} aria-label={`Open ${event.title} event`}>
+    <img className="event-featured-image" src={heroImage} alt="Migratory birds flying over Chilika's wetlands" onError={() => setHeroImage(event.heroFallback)} />
+    <span className="event-featured-shade" />
+    <span className="event-featured-top"><span><CalendarDays size={13} /> {event.eyebrow}</span><span className="event-featured-live">FIELD CHECKLIST</span></span>
+    <span className="event-featured-copy"><span className="event-featured-location"><MapPin size={13} /> {event.destination}</span><strong>{event.title}</strong><em>“{event.quote}”</em><span className="event-featured-bottom"><span>{event.season}</span><span className="event-featured-cta">Explore species <ArrowRight size={15} /></span></span></span>
+  </button>
+}
+
+function ChilikaEventDetail({ event, onBack }: { event: ExploreEvent; onBack: () => void }) {
+  const [photos, setPhotos] = useState<Record<string, string>>({})
+  const [heroImage, setHeroImage] = useState(event.heroImage)
+  const [photosLoading, setPhotosLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPhotos() {
+      setPhotosLoading(true)
+      const titles = [event.heroWikiTitle, ...event.species.map((item) => item.wikiTitle)]
+      try {
+        const params = new URLSearchParams({
+          action: 'query', format: 'json', prop: 'pageimages', piprop: 'thumbnail',
+          pithumbsize: '700', redirects: '1', origin: '*', titles: titles.join('|'),
+        })
+        const response = await fetch(`https://en.wikipedia.org/w/api.php?${params.toString()}`)
+        if (!response.ok) throw new Error('Could not load reference wildlife photos')
+        const payload = await response.json() as {
+          query?: {
+            pages?: Record<string, { title?: string; thumbnail?: { source?: string } }>
+            redirects?: Array<{ from: string; to: string }>
+            normalized?: Array<{ from: string; to: string }>
+          }
+        }
+        if (cancelled) return
+        const pagePhotos = new Map<string, string>()
+        for (const page of Object.values(payload.query?.pages ?? {})) {
+          if (page.title && page.thumbnail?.source) pagePhotos.set(normalizeWikiTitle(page.title), page.thumbnail.source)
+        }
+        const canonical = new Map<string, string>()
+        for (const item of [...(payload.query?.normalized ?? []), ...(payload.query?.redirects ?? [])]) {
+          canonical.set(normalizeWikiTitle(item.from), item.to)
+        }
+        const resolvedPhoto = (title: string) => {
+          const finalTitle = canonical.get(normalizeWikiTitle(title)) ?? title
+          return pagePhotos.get(normalizeWikiTitle(finalTitle)) ?? pagePhotos.get(normalizeWikiTitle(title))
+        }
+        const nextPhotos: Record<string, string> = {}
+        event.species.forEach((item) => {
+          const photo = resolvedPhoto(item.wikiTitle)
+          if (photo) nextPhotos[item.id] = photo
+        })
+        setPhotos(nextPhotos)
+        const eventHero = resolvedPhoto(event.heroWikiTitle)
+        if (eventHero) setHeroImage(eventHero)
+      } catch {
+        // Event cards remain usable if Wikipedia image lookup is offline.
+      } finally {
+        if (!cancelled) setPhotosLoading(false)
+      }
+    }
+    void loadPhotos()
+    return () => { cancelled = true }
+  }, [event])
+
+  return <div className="screen event-detail-screen">
+    <button type="button" className="event-back-button" onClick={onBack}><ChevronLeft size={17} /> All Explore</button>
+    <section className="event-detail-hero">
+      <img src={heroImage} alt="Birds over a Chilika wetland" onError={() => setHeroImage(event.heroFallback)} />
+      <span className="event-detail-hero-shade" />
+      <div className="event-detail-hero-content">
+        <span className="event-detail-kicker"><Bird size={14} /> {event.eyebrow} · ODISHA</span>
+        <h1>{event.title}</h1>
+        <p className="event-detail-quote">“{event.quote}”</p>
+        <div className="event-detail-pills"><span><MapPin size={13} /> {event.destination}</span><span><CalendarDays size={13} /> {event.season}</span></div>
+      </div>
+    </section>
+    <section className="event-intro-row">
+      <div><p className="eyebrow">FOLLOW THE FLIGHT PATH</p><h2>A whole sky to discover.</h2></div>
+      <p>{event.summary}</p>
+    </section>
+    <section className="event-checklist-section">
+      <div className="event-checklist-heading"><div><p className="eyebrow">YOUR FIELD CHECKLIST</p><h2>Look for these travellers</h2><p>Compact cards. Keep your eyes on the lagoon, not your screen.</p></div><span className="event-count"><Bird size={15} /> {event.species.length} species</span></div>
+      <div className="event-species-grid">
+        {event.species.map((item) => <article className="event-species-card" key={item.id} title={`${item.name} · ${item.scientificName}`}>
+          <div className="event-species-photo">
+            {photos[item.id]
+              ? <img src={photos[item.id]} alt={item.name} loading="lazy" />
+              : <span className="event-species-photo-fallback"><Bird size={27} /></span>}
+            <span className="event-species-group-icon"><Bird size={13} /></span>
+          </div>
+          <div className="event-species-name"><strong>{item.name}</strong><span>{item.group}</span></div>
+        </article>)}
+      </div>
+      {photosLoading && <p className="event-photo-loading"><span /> Loading species reference photos…</p>}
+      <p className="event-more-species">And many more to be discovered. This is a starter checklist, not a complete list of Chilika’s birdlife; which species you see depends on timing, habitat and conditions.</p>
+      <p className="event-species-note">Photo references are illustrative. Species are documented around Chilika, but seasonal presence and sightings are never guaranteed. Observe from permitted areas and do not disturb wildlife.</p>
+    </section>
+    {event.readMore && <section className="event-readme-section" aria-label={`Read about ${event.destination} migration`}>
+      <div className="event-readme-heading"><div><p className="eyebrow">READ THE STORY</p><h2>{event.readMore.heading}</h2></div><span className="event-readme-icon"><Waves size={20} /></span></div>
+      <p className="event-readme-intro">{event.readMore.intro}</p>
+      <div className="event-readme-stats">
+        <div><span className="event-readme-stat-icon"><Bird size={17} /></span><strong>{event.readMore.birdEstimate}</strong><small>migratory birds in a winter season</small></div>
+        <div><span className="event-readme-stat-icon"><Leaf size={17} /></span><strong>{event.readMore.speciesEstimate}</strong><small>species reported by Odisha Tourism</small></div>
+      </div>
+      <div className="event-readme-explainer-grid">
+        <article className="event-readme-card"><span className="event-readme-card-icon"><Waves size={17} /></span><h3>Why do they come?</h3><p>{event.readMore.whyTheyCome}</p></article>
+        <article className="event-readme-card"><span className="event-readme-card-icon"><Leaf size={17} /></span><h3>Why Chilika matters</h3><p>{event.readMore.wetlandImportance}</p></article>
+      </div>
+      <div className="event-readme-threats">
+        <div className="event-readme-subheading"><span className="event-readme-card-icon"><Binoculars size={17} /></span><div><p className="eyebrow">THE RISKS</p><h3>What puts the birds at risk?</h3></div></div>
+        <div className="event-readme-threat-grid">{event.readMore.threats.map((threat) => <article key={threat.title}><strong>{threat.title}</strong><p>{threat.description}</p></article>)}</div>
+        <p className="event-readme-caveat">These are documented conservation pressures, not a live incident report. Their severity varies by location and season.</p>
+      </div>
+      <div className="event-readme-help">
+        <div className="event-readme-subheading"><span className="event-readme-card-icon"><Binoculars size={17} /></span><div><p className="eyebrow">WATCH WITH CARE</p><h3>How visitors can help</h3></div></div>
+        <ul>{event.readMore.visitorActions.map((action) => <li key={action}>{action}</li>)}</ul>
+      </div>
+      <div className="event-readme-sources"><span>Read from the source</span>{event.readMore.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.label} <ArrowRight size={12} /></a>)}</div>
+    </section>}
+    <section className="event-field-note"><span><Binoculars size={20} /></span><div><strong>Take only photographs. Leave only ripples.</strong><p>Early mornings are a good time to watch the wetlands wake up. Follow local guidance, keep a respectful distance, and avoid restricted sanctuary areas.</p></div></section>
+    <div className="event-sources"><span>Field guide context</span><a href={event.sourceUrl} target="_blank" rel="noreferrer">{event.sourceLabel} <ArrowRight size={13} /></a></div>
+  </div>
+}
+
 function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSearchStatusChange: (status: 'running' | 'finished') => void }) {
   const [loading, setLoading] = useState(false)
-  const [loadingStage, setLoadingStage] = useState('Requesting your GPS location…')
+  const [loadingStage, setLoadingStage] = useState('Finding your location…')
   const [unavailablePhotoKeys, setUnavailablePhotoKeys] = useState<string[]>([])
+  const [fallbackPhotoUrls, setFallbackPhotoUrls] = useState<Record<string, { url: string; source: string; attribution: string }>>({})
+  const photoLookupAttemptsRef = useRef<Set<string>>(new Set())
+  const [seenNearbyTaxa, setSeenNearbyTaxa] = useState<Array<{ key: string; name: string; scientificName: string }>>([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [nearbySpecies, setNearbySpecies] = useState<NearbySpecies[]>([])
@@ -509,7 +774,13 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
   const [gpsCoordinates, setGpsCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null)
   const [expandedSpeciesKey, setExpandedSpeciesKey] = useState<string | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<{ url: string; scientificName: string; commonName: string } | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<{ url: string; scientificName: string; commonName: string; source?: string; attribution?: string } | null>(null)
+  const [activeEventId, setActiveEventId] = useState<string | null>(null)
+  const [sourceChecks, setSourceChecks] = useState<ExploreSourceChecks>({
+    hasRun: false, esaStatus: 'waiting', gbifStatus: 'waiting', gemmaStatus: 'waiting',
+    candidatePoolCount: 0, recordsFetched: 0, gemmaCandidateCount: 0, gemmaReturnedCount: 0, gemmaDisplayedCount: 0,
+    modelName: '', coastalLocation: null, rankingMode: '', partialGbif: false,
+  })
 
   useEffect(() => {
     if (!photoPreview) return
@@ -520,16 +791,51 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [photoPreview])
 
-  async function findWildlife() {
+  const requestPhotoFallback = useCallback(async (item: NearbySpecies, cardKey: string) => {
+    if (photoLookupAttemptsRef.current.has(cardKey)) return
+    photoLookupAttemptsRef.current.add(cardKey)
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/explore/photo?scientificName=${encodeURIComponent(item.scientificName || item.name)}`)
+      const payload = await response.json()
+      if (response.ok && typeof payload.photo === 'string' && payload.photo.startsWith('https://')) {
+        setFallbackPhotoUrls((current) => ({ ...current, [cardKey]: { url: payload.photo, source: String(payload.photoSource || 'Taxon reference photo'), attribution: String(payload.photoAttribution || '') } }))
+      } else {
+        setUnavailablePhotoKeys((current) => current.includes(cardKey) ? current : [...current, cardKey])
+      }
+    } catch (photoError) {
+      console.info('Reference photo fallback unavailable for', item.scientificName, photoError)
+      setUnavailablePhotoKeys((current) => current.includes(cardKey) ? current : [...current, cardKey])
+    }
+  }, [])
+
+  // Look up a taxon reference photo only for currently displayed species that have
+  // no GBIF image. This avoids making image requests for every unused candidate.
+  useEffect(() => {
+    nearbySpecies.forEach((item, index) => {
+      const cardKey = item.key || `${item.scientificName}-${index}`
+      if (!item.photo && !fallbackPhotoUrls[cardKey] && !unavailablePhotoKeys.includes(cardKey)) {
+        void requestPhotoFallback(item, cardKey)
+      }
+    })
+  }, [nearbySpecies, fallbackPhotoUrls, unavailablePhotoKeys, requestPhotoFallback])
+
+  async function findWildlife(advanceToNext = false) {
+    const previouslyShown = advanceToNext ? seenNearbyTaxa : []
     setError('')
     setMessage('')
     setHabitatError('')
     setHabitat(null)
     setNearbySpecies([])
     setUnavailablePhotoKeys([])
-    setLoadingStage('Requesting your GPS location…')
+    setLoadingStage('Finding your location…')
+    setSourceChecks({
+      hasRun: true, esaStatus: 'running', gbifStatus: 'running', gemmaStatus: 'waiting',
+      candidatePoolCount: 0, recordsFetched: 0, gemmaCandidateCount: 0, gemmaReturnedCount: 0, gemmaDisplayedCount: 0,
+      modelName: '', coastalLocation: null, rankingMode: '', partialGbif: false,
+    })
     if (!('geolocation' in navigator)) {
       setError('This browser does not support location. Try a modern browser or use manual location later.')
+      setSourceChecks(current => ({ ...current, esaStatus: 'skipped', gbifStatus: 'skipped', gemmaStatus: 'skipped' }))
       return
     }
     setLoading(true)
@@ -540,7 +846,7 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
       setGpsAccuracy(Number.isFinite(accuracy) ? accuracy : null)
       setExpandedSpeciesKey(null)
       setLocationLabel(`${latitude.toFixed(4)}, ${longitude.toFixed(4)} · GPS`)
-      setLoadingStage('Checking nearby wildlife and mapping habitats…')
+      setLoadingStage('Looking for wildlife and nearby habitats…')
       const habitatRequest = fetch(`http://127.0.0.1:5000/explore/habitat?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`)
         .then(async (response) => {
           const payload = await response.json()
@@ -554,6 +860,7 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
           latitude,
           longitude,
           existingSpecies: items.map((item) => ({ name: item.name, scientificName: item.latin })),
+          previouslyShownSpecies: previouslyShown,
         }),
       }).then(async (response) => {
         const payload = await response.json()
@@ -563,19 +870,40 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
 
       try {
         const [habitatResult, speciesResult] = await Promise.allSettled([habitatRequest, speciesRequest])
-
         if (habitatResult.status === 'fulfilled') {
           setHabitat(habitatResult.value)
+          setSourceChecks(current => ({ ...current, esaStatus: 'success' }))
         } else {
-          setHabitatError(habitatResult.reason instanceof Error ? habitatResult.reason.message : 'Could not retrieve ESA WorldCover habitat data. Check that Flask is running and rasterio is installed.')
+          const habitatMessage = habitatResult.reason instanceof Error ? habitatResult.reason.message : 'Could not retrieve ESA WorldCover habitat data. Check that Flask is running and rasterio is installed.'
+          setHabitatError(habitatMessage)
+          setSourceChecks(current => ({ ...current, esaStatus: 'failed' }))
         }
 
         if (speciesResult.status === 'fulfilled') {
           const payload = speciesResult.value
-          // Keep the five-species limit in the UI too, in addition to the backend limit.
-          let records = (Array.isArray(payload.species) ? payload.species as NearbySpecies[] : []).slice(0, 5)
-          if (records.length > 0 && habitatResult.status === 'fulfilled') {
-            setLoadingStage('Asking hosted Gemma to rank the evidence…')
+          // GBIF returns a diverse candidate pool (up to 30); the visible UI is always capped at five.
+          const candidateResponse = (Array.isArray(payload.candidates) ? payload.candidates as NearbySpecies[] : Array.isArray(payload.species) ? payload.species as NearbySpecies[] : [])
+          const seenIdentities = new Set(previouslyShown.flatMap((item) => [item.key, item.scientificName.trim().toLowerCase()]).filter(Boolean))
+          const candidates = candidateResponse.filter((item) => {
+            if (!advanceToNext) return true
+            const key = String(item.key || '')
+            const scientificName = String(item.scientificName || '').trim().toLowerCase()
+            return !seenIdentities.has(key) && !seenIdentities.has(scientificName)
+          }).slice(0, 30)
+          let displayedRecords = candidates.slice(0, 5)
+          setSourceChecks(current => ({
+            ...current,
+            gbifStatus: candidates.length ? (payload.partialResults ? 'partial' : 'success') : 'success',
+            candidatePoolCount: candidates.length,
+            recordsFetched: Number(payload.recordsFetched) || 0,
+            coastalLocation: typeof payload.coastalLocation === 'boolean' ? payload.coastalLocation : null,
+            rankingMode: typeof payload.rankingMode === 'string' ? payload.rankingMode : '',
+            partialGbif: Boolean(payload.partialResults),
+            gemmaStatus: candidates.length && habitatResult.status === 'fulfilled' ? 'running' : 'skipped',
+          }))
+
+          if (candidates.length > 0 && habitatResult.status === 'fulfilled') {
+            setLoadingStage('Choosing wildlife for you…')
             try {
               const recommendationResponse = await fetch('http://127.0.0.1:5000/explore/recommend', {
                 method: 'POST',
@@ -583,7 +911,7 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
                 body: JSON.stringify({
                   coastalLocation: Boolean(payload.coastalLocation),
                   habitat: habitatResult.value,
-                  species: records.map((item) => ({
+                  species: candidates.map((item) => ({
                     key: item.key,
                     name: item.name,
                     scientificName: item.scientificName,
@@ -591,6 +919,10 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
                     nearbyRecordCount: item.nearbyRecordCount,
                     priorityLabel: item.priorityLabel,
                     taxonGroup: item.taxonGroup,
+                    taxonClass: item.taxonClass,
+                    taxonOrder: item.taxonOrder,
+                    taxonFamily: item.taxonFamily,
+                    distanceKm: item.distanceKm,
                     isInsect: item.isInsect,
                     isCoastalWildlife: item.isCoastalWildlife,
                   })),
@@ -598,37 +930,112 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
               })
               const recommendationPayload = await recommendationResponse.json()
               if (!recommendationResponse.ok) throw new Error(recommendationPayload.error || 'Gemma recommendation request failed.')
-              const byScientificName = new Map(records.map((item) => [item.scientificName.trim().toLowerCase(), item]))
+              const byScientificName = new Map(candidates.map((item) => [item.scientificName.trim().toLowerCase(), item]))
               const ranked: NearbySpecies[] = []
               if (Array.isArray(recommendationPayload.recommendations)) {
                 for (const recommendation of recommendationPayload.recommendations) {
                   if (!recommendation || typeof recommendation.scientificName !== 'string') continue
                   const candidate = byScientificName.get(recommendation.scientificName.trim().toLowerCase())
-                  if (candidate && !ranked.some((item) => item.scientificName === candidate.scientificName)) {
-                    ranked.push({ ...candidate, recommendationReason: typeof recommendation.reason === 'string' ? recommendation.reason : undefined })
+                  if (candidate && !ranked.some((item) => item.scientificName.trim().toLowerCase() === candidate.scientificName.trim().toLowerCase())) {
+                    ranked.push({
+                      ...candidate,
+                      recommendationReason: typeof recommendation.reason === 'string' ? recommendation.reason : undefined,
+                      whereToLook: typeof recommendation.whereToLook === 'string' ? recommendation.whereToLook.trim() : undefined,
+                    })
                   }
                 }
               }
-              if (ranked.length) {
+              if (ranked.length > 0) {
                 const rankedNames = new Set(ranked.map((item) => item.scientificName.trim().toLowerCase()))
-                records = [...ranked, ...records.filter((item) => !rankedNames.has(item.scientificName.trim().toLowerCase()))].slice(0, 5)
-                setMessage(`Gemma ranked ${ranked.length} candidates using nearby GBIF records and ESA habitat context. These are evidence-based suggestions, not confirmation of current presence.`)
+                const rankedThenFallback = [
+                  ...ranked,
+                  ...candidates
+                    .filter((item) => !rankedNames.has(item.scientificName.trim().toLowerCase()))
+                    .map((item) => ({ ...item, recommendationReason: 'Included from nearby GBIF records to preserve taxonomic diversity; this species was not selected by Gemma in its returned ranking.' })),
+                ]
+                // Enforce diversity after the model call too: take one per taxonomic
+                // group first, then fill any remaining slots if the pool is narrow.
+                const diversified: NearbySpecies[] = []
+                const seenGroups = new Set<string>()
+                const seenScientificNames = new Set<string>()
+                for (const candidate of rankedThenFallback) {
+                  const scientificKey = candidate.scientificName.trim().toLowerCase()
+                  const groupKey = (candidate.taxonGroup || 'Other animals').trim().toLowerCase()
+                  if (seenScientificNames.has(scientificKey) || seenGroups.has(groupKey)) continue
+                  diversified.push(candidate)
+                  seenScientificNames.add(scientificKey)
+                  seenGroups.add(groupKey)
+                  if (diversified.length >= 5) break
+                }
+                if (diversified.length < 5) {
+                  for (const candidate of rankedThenFallback) {
+                    const scientificKey = candidate.scientificName.trim().toLowerCase()
+                    if (seenScientificNames.has(scientificKey)) continue
+                    diversified.push(candidate)
+                    seenScientificNames.add(scientificKey)
+                    if (diversified.length >= 5) break
+                  }
+                }
+                displayedRecords = diversified.slice(0, 5)
+                const modelRankedNames = new Set(ranked.map((item) => item.scientificName.trim().toLowerCase()))
+                const displayedGemmaCount = displayedRecords.filter((item) => modelRankedNames.has(item.scientificName.trim().toLowerCase())).length
+                const completeRanking = displayedGemmaCount >= Math.min(5, candidates.length)
+                setSourceChecks(current => ({
+                  ...current,
+                  gemmaStatus: completeRanking ? 'success' : 'partial',
+                  gemmaCandidateCount: Number(recommendationPayload.candidateCount) || candidates.length,
+                  gemmaReturnedCount: ranked.length,
+                  gemmaDisplayedCount: displayedGemmaCount,
+                  modelName: typeof recommendationPayload.model === 'string' ? recommendationPayload.model : '',
+                }))
+                setMessage('A varied selection of nearby wildlife is ready to explore.')
               } else {
-                setMessage('Habitat and GBIF data loaded, but Gemma did not return a valid ranking. Showing the original GBIF order instead.')
+                displayedRecords = candidates.slice(0, 5)
+                setSourceChecks(current => ({
+                  ...current, gemmaStatus: 'fallback',
+                  gemmaCandidateCount: Number(recommendationPayload.candidateCount) || candidates.length,
+                  gemmaReturnedCount: 0,
+                  gemmaDisplayedCount: 0,
+                  modelName: typeof recommendationPayload.model === 'string' ? recommendationPayload.model : '',
+                }))
+                setMessage('Here are some nearby species to explore.')
               }
             } catch (recommendationError) {
               console.warn('Gemma wildlife recommendation failed; retaining GBIF ranking.', recommendationError)
-              setMessage('Habitat and GBIF data loaded. Gemma recommendations were unavailable, so the original GBIF ranking is shown.')
+              displayedRecords = candidates.slice(0, 5)
+              setSourceChecks(current => ({ ...current, gemmaStatus: 'fallback', gemmaCandidateCount: candidates.length, gemmaReturnedCount: 0, gemmaDisplayedCount: 0 }))
+              setMessage('Recommendations are limited right now, so we are showing other wildlife recorded nearby.')
             }
+          } else if (candidates.length > 0) {
+            setMessage('Habitat information is unavailable right now, but nearby wildlife is still shown.')
+          } else {
+            setSourceChecks(current => ({ ...current, gemmaStatus: 'skipped' }))
+            setMessage('No new species found here yet. Try again later or explore another area.')
           }
-          setNearbySpecies(records)
-          if (!records.length) {
-            setMessage('No eligible new animal species were found in this search batch. Species already in your Compendium are excluded; try again later.')
-          } else if (habitatResult.status !== 'fulfilled') {
-            setMessage('GBIF species records loaded, but habitat data was unavailable, so Gemma ranking was skipped.')
-          }
+          const finalDisplayedRecords = displayedRecords.slice(0, 5)
+          setNearbySpecies(finalDisplayedRecords)
+          setSeenNearbyTaxa((current) => {
+            const next = [...current]
+            const known = new Set(current.flatMap((item) => [item.key, item.scientificName.trim().toLowerCase()]))
+            for (const item of finalDisplayedRecords) {
+              const record = {
+                key: String(item.key || item.scientificName).trim(),
+                name: String(item.name || item.scientificName).trim(),
+                scientificName: String(item.scientificName || item.name).trim(),
+              }
+              const identities = [record.key, record.scientificName.toLowerCase()]
+              if (identities.some((identity) => identity && !known.has(identity))) {
+                next.push(record)
+                identities.forEach((identity) => { if (identity) known.add(identity) })
+              }
+            }
+            return next
+          })
         } else {
-          setError(speciesResult.reason instanceof Error ? speciesResult.reason.message : 'Could not retrieve nearby species. Check that Flask is running on port 5000.')
+          const speciesMessage = speciesResult.reason instanceof Error ? speciesResult.reason.message : 'Nearby wildlife lookup failed.'
+          console.warn('Nearby wildlife lookup failed:', speciesMessage)
+          setError('Could not load nearby wildlife. Please try again.')
+          setSourceChecks(current => ({ ...current, gbifStatus: 'failed', gemmaStatus: 'skipped' }))
         }
       } finally {
         setLoading(false)
@@ -637,21 +1044,21 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     }, (geoError) => {
       setLoading(false)
       onSearchStatusChange('finished')
+      setSourceChecks(current => ({ ...current, esaStatus: 'skipped', gbifStatus: 'skipped', gemmaStatus: 'skipped' }))
       if (geoError.code === geoError.PERMISSION_DENIED) setError('Location permission was denied. Allow location access in your browser settings and try again.')
       else if (geoError.code === geoError.TIMEOUT) setError('Location lookup timed out. Please try again.')
       else setError('Could not determine your location. Check your device location settings and try again.')
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 })
   }
 
-  // Keep the two independent data sources together as one evidence bundle.
-  // This is the structured context assembled from the two live data sources.
+  // Prepare a compact, plain-language summary of nearby habitats and wildlife.
   const combinedExploreContext = habitat && nearbySpecies.length > 0 ? {
     coordinates: gpsCoordinates,
     radiusKm: habitat.samplingRadiusKm,
     dominantHabitat: habitat.dominantHabitat,
     habitatClasses: habitat.classes.slice(0, 4).map(({ name, samplePercent, samples }) => ({ name, samplePercent, samples })),
     species: nearbySpecies.slice(0, 5).map(({ scientificName, name, observedAt, nearbyRecordCount }) => ({ scientificName, commonName: name, observedAt, nearbyRecordCount })),
-    evidenceNote: 'Land-cover classes describe the surrounding area. GBIF records document observations within the search radius; they do not prove that a species currently occurs in a particular land-cover class.',
+    evidenceNote: 'These are previous sightings, not guaranteed sightings today.',
   } : null
 
   const mapSrc = gpsCoordinates ? (() => {
@@ -664,41 +1071,62 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bounds)}&layer=mapnik&marker=${latitude}%2C${longitude}`
   })() : ''
 
+  const activeEvent = EXPLORE_EVENTS.find((event) => event.id === activeEventId)
+  if (activeEvent) return <ChilikaEventDetail event={activeEvent} onBack={() => setActiveEventId(null)} />
+
   return <div className="screen">
-    <div className="page-title"><p className="eyebrow">LOCAL BIODIVERSITY</p><h1>Look a little closer.</h1><p>Find up to five new species recorded near you per search. Anything already in your Compendium is excluded.</p></div>
+    <div className="page-title explore-landing-title"><p className="eyebrow">LOCAL BIODIVERSITY</p><h1>Discover your surroundings.</h1><p>Find nearby wildlife, then follow seasonal events.</p></div>
+    <section className="explore-feature-panel explore-local-panel" aria-label="Explore nearby wildlife">
+      <div className="explore-module-heading"><div><p className="eyebrow">START HERE</p><h2>Find wildlife near you.</h2><p>Explore nearby wildlife and habitats.</p></div><span className="explore-module-icon"><MapPin size={19} /></span></div>
     <div className="map-card explore-map-card">
       <div className="explore-map-wrap">
-        {gpsCoordinates ? <iframe className="explore-map-iframe" title="OpenStreetMap centered on your GPS location" src={mapSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : <div className="explore-map-empty"><span className="explore-map-empty-icon"><MapPin size={23} /></span><strong>Your map will appear here</strong><span>Share your location to view a real map centered on your GPS coordinates.</span></div>}
+        {gpsCoordinates ? <iframe className="explore-map-iframe" title="OpenStreetMap centered on your GPS location" src={mapSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : <div className="explore-map-empty"><span className="explore-map-empty-icon"><MapPin size={23} /></span><strong>Your map will appear here</strong><span>Share your location to place the map here.</span></div>}
       </div>
-      <div className="map-footer"><div><strong>Your exploration area</strong><span><MapPin size={13} /> {locationLabel}{gpsAccuracy !== null ? ` · ±${Math.round(gpsAccuracy)} m` : ''}</span></div><button className="outline-button" onClick={findWildlife} disabled={loading}>{loading ? 'Finding…' : gpsCoordinates ? 'Refresh nearby' : 'Find wildlife near me'}</button></div>
+      <div className="map-footer"><div><strong>Your exploration area</strong><span><MapPin size={13} /> {locationLabel}{gpsAccuracy !== null ? ` · ±${Math.round(gpsAccuracy)} m` : ''}</span></div><button className="outline-button" onClick={() => findWildlife(Boolean(gpsCoordinates && seenNearbyTaxa.length))} disabled={loading}>{loading ? 'Finding…' : gpsCoordinates ? 'Next nearby species' : 'Find wildlife near me'}</button></div>
       {gpsCoordinates && <a className="explore-open-map" href={`https://www.openstreetmap.org/?mlat=${gpsCoordinates.latitude}&mlon=${gpsCoordinates.longitude}#map=14/${gpsCoordinates.latitude}/${gpsCoordinates.longitude}`} target="_blank" rel="noreferrer">Open larger map <ArrowRight size={13} /></a>}
     </div>
+    {sourceChecks.hasRun && !loading && Boolean(gpsCoordinates) && !error && <div className="explore-complete-hint" role="status" aria-live="polite">
+      <span className="explore-complete-mark" aria-hidden="true">✓</span>
+      <div><strong>Exploration complete</strong><span>Scroll down to see your nearby species and habitat results.</span></div>
+    </div>}
     {loading && <section className="explore-loading-panel" role="status" aria-live="polite" aria-label="Wildlife search in progress">
       <div className="explore-loading-visual" aria-hidden="true"><span className="explore-loading-ring" /><span className="explore-loading-leaf"><Leaf size={23} /></span></div>
-      <div className="explore-loading-copy"><p className="eyebrow">EXPLORING YOUR AREA</p><h3>{loadingStage}</h3><p>Checking ESA WorldCover, nearby GBIF observations, and backup species photos. This can take a little time—you can keep using other WildQuest tabs.</p></div>
+      <div className="explore-loading-copy"><p className="eyebrow">EXPLORING YOUR AREA</p><h3>{loadingStage}</h3><p>This may take a moment. You can keep using WildQuest while we search.</p></div>
       <div className="explore-loading-progress" aria-hidden="true"><span /><span /><span /></div>
     </section>}
     {error && <p className="modal-text" role="alert" style={{ marginTop: 12 }}>{error}</p>}
-    {habitatError && <p className="modal-text" role="status" style={{ marginTop: 12 }}>Habitat lookup unavailable: {habitatError}</p>}
+    {habitatError && <p className="modal-text" role="status" style={{ marginTop: 12 }}>Nearby habitat information could not load this time.</p>}
+    </section>
+        <section className="seasonal-events-section explore-feature-panel explore-events-panel" aria-label="Seasonal field events">
+      <div className="section-heading event-section-heading"><div><p className="eyebrow">SEASONAL FIELD EVENTS</p><h2>Follow the wild seasons.</h2></div><span className="event-section-icon"><Sparkles size={17} /></span></div>
+      <p className="event-section-intro">Special places. Short-lived wonders. New field checklists to explore.</p>
+      <div className="event-featured-list">
+        {EXPLORE_EVENTS.map((event) => <ExploreEventCard key={event.id} event={event} onOpen={setActiveEventId} />)}
+      </div>
+      <div className="event-future-note"><span className="event-future-icon"><CalendarDays size={17} /></span><div><strong>More seasonal events are on the horizon</strong><p>Future migrations, habitats, and conservation events can be added to this collection.</p></div></div>
+    </section>
+    {(habitat || sourceChecks.hasRun || nearbySpecies.length > 0 || Boolean(message)) && <section className="explore-results-panel" aria-label="Nearby habitat and species results">
     {habitat && <section className="worldcover-panel">
-      <div className="section-heading compact"><div><p className="eyebrow">ESA WORLDCOVER · 2021</p><h2>Land cover near you</h2></div><span className="worldcover-radius">{habitat.samplingRadiusKm} km area</span></div>
-      <p className="worldcover-intro">{habitat.validSamples} of {habitat.attemptedSamples} sample points were classified from the 10 m land-cover dataset.</p>
+      <div className="section-heading compact"><div><p className="eyebrow">NEARBY HABITATS</p><h2>Habitats around you</h2></div><span className="worldcover-radius">Near you</span></div>
+      <p className="worldcover-intro">A quick snapshot of the land and water habitats around your location.</p>
       {habitat.classes.slice(0, 4).map((landClass) => <div className="worldcover-class" key={landClass.code}>
-        <div className="worldcover-class-heading"><span className="worldcover-dot" style={{ backgroundColor: worldCoverColors[landClass.code] || '#a4ac86' }} /><div className="worldcover-class-label"><strong>{landClass.name}</strong><small>{landClass.samples} sample {landClass.samples === 1 ? 'point' : 'points'}</small></div><b>{landClass.samplePercent}%</b></div>
+        <div className="worldcover-class-heading"><span className="worldcover-dot" style={{ backgroundColor: worldCoverColors[landClass.code] || '#a4ac86' }} /><div className="worldcover-class-label"><strong>{landClass.name}</strong></div><b>{landClass.samplePercent}%</b></div>
         <div className="worldcover-bar"><span style={{ width: `${landClass.samplePercent}%`, backgroundColor: worldCoverColors[landClass.code] || '#a4ac86' }} /></div>
       </div>)}
-      <p className="worldcover-attribution">{habitat.note} {habitat.attribution}</p>
+      <details className="worldcover-attribution explore-data-details"><summary>About this habitat map</summary><p>Habitat types are estimated from satellite imagery. They suggest what may live nearby, but do not guarantee a species is present.</p><small>Source: ESA WorldCover 2021. {habitat.attribution}</small></details>
     </section>}
     {combinedExploreContext && <section className="combined-context-panel" aria-label="Combined habitat and wildlife context">
-      <div className="combined-context-heading"><div><p className="eyebrow">LOCAL BIODIVERSITY CONTEXT</p><h2>Habitat + wildlife records</h2></div><span className="combined-context-badge">Combined evidence</span></div>
-      <div className="combined-context-stats"><div><span>Dominant sampled land cover</span><strong>{combinedExploreContext.dominantHabitat || 'Not classified'}</strong></div><div><span>New species records</span><strong>{combinedExploreContext.species.length} of 5 maximum</strong></div></div>
-      <div className="combined-context-habitats"><span className="combined-context-label">Other sampled land-cover classes</span><div>{combinedExploreContext.habitatClasses.map((landClass) => <span key={landClass.name}>{landClass.name} · {landClass.samplePercent}%</span>)}</div></div>
+      <div className="combined-context-heading"><div><p className="eyebrow">YOUR LOCAL AREA</p><h2>Nearby habitats &amp; wildlife</h2></div></div>
+      <div className="combined-context-stats"><div><span>Main habitat</span><strong>{combinedExploreContext.dominantHabitat || 'Unknown'}</strong></div><div><span>Species to explore</span><strong>{combinedExploreContext.species.length}</strong></div></div>
+      <div className="combined-context-habitats"><span className="combined-context-label">Other nearby habitats</span><div>{combinedExploreContext.habitatClasses.map((landClass) => <span key={landClass.name}>{landClass.name} · {landClass.samplePercent}%</span>)}</div></div>
       <p className="combined-context-note">{combinedExploreContext.evidenceNote}</p>
     </section>}
+    {(nearbySpecies.length > 0 || sourceChecks.hasRun) && <>
     {message && <p className="modal-text" role="status" style={{ marginTop: 12 }}>{message}</p>}
-    <div className="section-heading compact"><div><p className="eyebrow">GBIF OCCURRENCE RECORDS</p><h2>{nearbySpecies.length ? 'Species recorded nearby' : 'What might you find?'}</h2></div><button className="icon-button" onClick={findWildlife} aria-label="Refresh nearby species" title="Refresh nearby species" disabled={loading}><RefreshCw size={16} /></button></div>
+    <div className="section-heading compact"><div><p className="eyebrow">NEARBY WILDLIFE</p><h2>{nearbySpecies.length ? 'Wildlife to discover' : 'What might you find?'}</h2></div><button className="icon-button" onClick={() => findWildlife(Boolean(gpsCoordinates && seenNearbyTaxa.length))} aria-label="Show next nearby species" title="Show next nearby species" disabled={loading}><RefreshCw size={16} /></button></div>
     {nearbySpecies.length ? <div className="nearby-species-list">{nearbySpecies.map((item, index) => {
       const cardKey = item.key || `${item.scientificName}-${index}`
+      const visiblePhotoUrl = fallbackPhotoUrls[cardKey]?.url || item.photo || ''
       const expanded = expandedSpeciesKey === cardKey
       const hasCoordinates = item.latitude !== null && item.longitude !== null && Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
       const observationMapUrl = hasCoordinates ? `https://www.openstreetmap.org/?mlat=${item.latitude}&mlon=${item.longitude}#map=15/${item.latitude}/${item.longitude}` : ''
@@ -706,36 +1134,50 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
       const commonName = item.name && item.name.toLowerCase() !== scientificName.toLowerCase() ? item.name : ''
       return <article className={`nearby-species-card ${expanded ? 'is-expanded' : ''}`} key={cardKey}>
         <div className="nearby-species-row">
-          {item.photo && !unavailablePhotoKeys.includes(cardKey) ? <button className="nearby-species-photo-button" type="button" aria-label={`Expand photo of ${scientificName}`} onClick={() => setPhotoPreview({ url: item.photo as string, scientificName, commonName })}>
-            <img src={item.photo} alt={`Photo of ${scientificName}`} loading="lazy" onError={() => setUnavailablePhotoKeys((current) => current.includes(cardKey) ? current : [...current, cardKey])} />
+          {visiblePhotoUrl && !unavailablePhotoKeys.includes(cardKey) ? <button className="nearby-species-photo-button" type="button" aria-label={`Expand photo of ${scientificName}`} onClick={() => setPhotoPreview({ url: visiblePhotoUrl, scientificName, commonName, source: fallbackPhotoUrls[cardKey]?.source || item.photoSource || 'GBIF occurrence media', attribution: fallbackPhotoUrls[cardKey]?.attribution || item.photoAttribution || '' })}>
+            <img src={visiblePhotoUrl} alt={`Photo of ${scientificName}`} loading="lazy" onError={() => {
+              if (fallbackPhotoUrls[cardKey]) {
+                setUnavailablePhotoKeys((current) => current.includes(cardKey) ? current : [...current, cardKey])
+              } else {
+                void requestPhotoFallback(item, cardKey)
+              }
+            }} />
             <span className="nearby-photo-expand-hint"><Expand size={14} /></span>
           </button> : <span className="nearby-species-thumb" aria-label="No image available"><Leaf size={24} /></span>}
           <button className="nearby-species-trigger" type="button" aria-expanded={expanded} aria-controls={`nearby-species-details-${index}`} onClick={() => setExpandedSpeciesKey(expanded ? null : cardKey)}>
-            <span className="nearby-species-main"><span className="rarity">GBIF · RECORDED OBSERVATION</span><strong>{scientificName}</strong>{commonName && <em>{commonName}</em>}<small>{item.observedAt ? item.observedAt.slice(0, 10) : 'Observation date not supplied'}</small>{item.priorityLabel && <span className="nearby-priority-label">{item.priorityLabel}</span>}</span>
+            <span className="nearby-species-main"><span className="rarity">RECORDED NEARBY</span><strong>{scientificName}</strong>{commonName && <em>{commonName}</em>}<small>{item.observedAt ? item.observedAt.slice(0, 10) : 'Date not listed'}</small>{item.whereToLook && <span className="nearby-where-to-look"><MapPin size={11} aria-hidden="true" /> <span><b>Where to look:</b> {item.whereToLook}</span></span>}{friendlyPriorityLabel(item.priorityLabel) && <span className="nearby-priority-label">{friendlyPriorityLabel(item.priorityLabel)}</span>}</span>
             <ChevronRight className="nearby-species-chevron" size={18} aria-hidden="true" />
           </button>
         </div>
         {expanded && <div className="nearby-species-details" id={`nearby-species-details-${index}`}>
           <div><span>Scientific name</span><strong>{scientificName}</strong></div>
           {commonName && <div><span>Common name</span><strong>{commonName}</strong></div>}
-          <div><span>Recorded date</span><strong>{item.observedAt ? item.observedAt.slice(0, 10) : 'Not supplied by GBIF'}</strong></div>
-          {typeof item.nearbyRecordCount === 'number' && <div><span>Records in this nearby result batch</span><strong>{item.nearbyRecordCount}</strong></div>}
-          {item.recommendationReason && <div><span>Why WildQuest recommends it</span><strong>{item.recommendationReason}</strong></div>}
-          {hasCoordinates && <div><span>Observation coordinates</span><strong>{item.latitude!.toFixed(5)}, {item.longitude!.toFixed(5)}</strong></div>}
-          <p>GBIF documents an occurrence record here; it does not confirm that the species is present today. Local record frequency is only a rough ranking signal, not proof of biological rarity.</p>
-          {hasCoordinates && <a href={observationMapUrl} target="_blank" rel="noreferrer">View record location on map <ArrowRight size={13} /></a>}
-          {item.photo && <button className="nearby-detail-photo-link" type="button" onClick={() => setPhotoPreview({ url: item.photo as string, scientificName, commonName })}>View larger photo <Expand size={13} /></button>}
+          <div><span>Last recorded</span><strong>{item.observedAt ? item.observedAt.slice(0, 10) : 'Date not listed'}</strong></div>
+          
+          {item.whereToLook && <div><span>Where to look</span><strong>{item.whereToLook}</strong></div>}
+          {item.recommendationReason && <div><span>Why look for it</span><strong>{item.recommendationReason}</strong></div>}
+          
+          <p>This species has been recorded nearby, but a sighting is never guaranteed. Fewer local records do not necessarily mean a species is rare.</p>
+          {hasCoordinates && <a href={observationMapUrl} target="_blank" rel="noreferrer">View location on map <ArrowRight size={13} /></a>}
+          {visiblePhotoUrl && !unavailablePhotoKeys.includes(cardKey) && <button className="nearby-detail-photo-link" type="button" onClick={() => setPhotoPreview({ url: visiblePhotoUrl, scientificName, commonName, source: fallbackPhotoUrls[cardKey]?.source || item.photoSource || 'GBIF occurrence media', attribution: fallbackPhotoUrls[cardKey]?.attribution || item.photoAttribution || '' })}>View larger photo <Expand size={13} /></button>}
         </div>}
       </article>
-    })}</div> : <div className="quest-history-empty"><h2>{locationLabel === 'Location not shared' ? 'Start with your location' : 'No new species in this batch'}</h2><p>{locationLabel === 'Location not shared' ? 'Tap the button above to request GPS permission and find up to five species with documented observations nearby. Species already in your Compendium are excluded.' : 'No new species are currently displayed. Check the lookup message above. Habitat data is listed separately; Gemma-based recommendations will be added after these data sources are working.'}</p></div>}
+    })}</div> : loading ? null : <div className="quest-history-empty"><h2>{seenNearbyTaxa.length ? 'No more unseen species in this result pool' : 'No new species found'}</h2><p>{seenNearbyTaxa.length ? 'You have seen all the species in this batch. Try again later or explore another area.' : 'Try again later or explore another area. Species in your Compendium are skipped.'}</p></div>}
     {photoPreview && <div className="nearby-photo-lightbox" role="dialog" aria-modal="true" aria-label={`Photo of ${photoPreview.scientificName}`} onClick={() => setPhotoPreview(null)}>
       <div className="nearby-photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
         <button className="nearby-photo-lightbox-close" type="button" aria-label="Close enlarged photo" onClick={() => setPhotoPreview(null)}><X size={21} /></button>
-        <img src={photoPreview.url} alt={`Expanded photo associated with ${photoPreview.scientificName}`} onError={() => setPhotoPreview(null)} />
-        <div className="nearby-photo-lightbox-caption"><strong>{photoPreview.scientificName}</strong>{photoPreview.commonName && <span>{photoPreview.commonName}</span>}<small>{nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoSource === 'iNaturalist taxon photo' ? 'Reference photo from iNaturalist for this taxon; it may not depict the individual recorded by GBIF.' : 'Image supplied with a GBIF occurrence record; identification may require independent verification.'}{nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoAttribution ? ` Attribution: ${nearbySpecies.find((item) => item.scientificName === photoPreview.scientificName)?.photoAttribution}` : ''}</small></div>
+        <img src={photoPreview.url} alt={`Expanded photo associated with ${photoPreview.scientificName}`} onError={() => {
+          const failedIndex = nearbySpecies.findIndex((item) => item.scientificName === photoPreview.scientificName)
+          const failedItem = failedIndex >= 0 ? nearbySpecies[failedIndex] : undefined
+          if (failedItem) void requestPhotoFallback(failedItem, failedItem.key || `${failedItem.scientificName}-${failedIndex}`)
+          setPhotoPreview(null)
+        }} />
+        <div className="nearby-photo-lightbox-caption"><strong>{photoPreview.scientificName}</strong>{photoPreview.commonName && <span>{photoPreview.commonName}</span>}<small>{photoPreview.source === 'GBIF occurrence media' ? 'Photo attached to a recorded sighting.' : 'Reference photo for this species; it may show a different individual.'}{photoPreview.attribution ? ` Photo credit: ${photoPreview.attribution}` : ''}</small></div>
       </div>
     </div>}
-    <p className="modal-text" style={{ fontSize: 12, marginTop: 14 }}>GBIF records show documented observations, not guaranteed current sightings. Photo licenses and attribution may vary by record.</p>
+    <p className="modal-text nearby-results-note">These are previous sightings, not guaranteed sightings today. Some photos are reference images.</p>
+    </>}
+    </section>}
   </div>
 }
 
@@ -746,12 +1188,221 @@ function formatFoundDate(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function Compendium({ onOpen, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; items: SpeciesItem[] }) { const [query, setQuery] = useState(''); const shown = items.filter((s) => `${s.name} ${s.latin} ${s.category}`.toLowerCase().includes(query.toLowerCase())); const acceptedPoints = items.filter((item) => item.status !== 'Demonstration entry' && item.identificationStatus !== 'pending' && item.identificationStatus !== 'failed').reduce((total, item) => total + item.points, 0); const discoveriesThisMonth = items.filter((item) => item.dateFound && new Date(item.dateFound).getMonth() === new Date().getMonth() && new Date(item.dateFound).getFullYear() === new Date().getFullYear()).length; return <div className="screen"><div className="page-title collection-title"><div><p className="eyebrow">YOUR FIELD GUIDE</p><h1>Compendium</h1></div><div className="collection-count"><strong>{items.length}</strong><span>species entries</span></div></div><div className="collection-stats"><div><strong>{acceptedPoints}</strong><span>recorded points</span></div><div><strong>{items.length}</strong><span>field notes</span></div><div><strong>{discoveriesThisMonth}</strong><span>added this month</span></div></div><div className="searchbox"><Search size={18} /><input aria-label="Search compendium" placeholder="Search species" value={query} onChange={(e) => setQuery(e.target.value)} /></div><div className="filter-row"><button className="filter active">All</button><button className="filter">Birds</button><button className="filter">Plants</button><button className="filter">Insects</button></div><div className="species-grid compendium-species-scroll">{shown.map((item, index) => <button className={`species-card rarity-${item.rarity.toLowerCase().replace(' ', '-')}`} key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`} onClick={() => onOpen('species', item)}><div className="species-photo"><img src={item.image} alt={item.name} /><span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div><div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div><div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.status === 'Demonstration entry' ? 'Demo' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>{item.dateFound ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}>Found: {formatFoundDate(item.dateFound)}</p> : item.status === 'Demonstration entry' ? <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#936639' }}>Demonstration entry</p> : null}</button>)}</div></div> }
+const COMPENDIUM_NAME_ALIASES: Record<string, string> = {
+  // The photo-identification model sometimes gives a generic name first and a
+  // more specific common name later. Keep these as one local-species entry.
+  'monitor lizard': 'varanus bengalensis',
+  'bengal monitor': 'varanus bengalensis',
+  'indian monitor': 'varanus bengalensis',
+}
+
+function verifiedScientificName(value: string) {
+  const normalized = normalizeTaxonText(value)
+  return Boolean(
+    normalized &&
+    !normalized.includes('not verified') &&
+    !normalized.includes('unknown') &&
+    !normalized.includes('unidentified') &&
+    !normalized.includes('unavailable') &&
+    /^[a-z][a-z-]+(?:\s+[a-z][a-z-]+){1,2}$/.test(normalized),
+  )
+}
+
+function compendiumSpeciesKey(item: SpeciesItem) {
+  const name = normalizeTaxonText(item.name)
+  // Pending or failed identifications are not species yet; do not accidentally
+  // collapse unrelated uploads that have the same placeholder text.
+  if (item.identificationStatus === 'pending' || name === 'unidentified organism' || name === 'identifying') {
+    return `unresolved:${item.id || `${name}-${item.dateFound || ''}`}`
+  }
+
+  if (verifiedScientificName(item.latin)) return `sci:${normalizeTaxonText(item.latin)}`
+
+  const knownLatin = knownScientificName(item.name)
+  if (verifiedScientificName(knownLatin)) return `sci:${normalizeTaxonText(knownLatin)}`
+
+  const commonNameAlias = COMPENDIUM_NAME_ALIASES[name]
+  if (commonNameAlias) return `sci:${commonNameAlias}`
+
+  const taxonAlias = TAXON_ALIASES[name]
+  if (taxonAlias) return `sci:${taxonAlias}`
+
+  return `name:${name}`
+}
+
+function observationFromEntry(item: SpeciesItem): SpeciesObservation {
+  return {
+    ...(item.id ? { id: item.id } : {}),
+    ...(item.dateFound ? { dateFound: item.dateFound } : {}),
+    ...(item.locationFound ? { locationFound: item.locationFound } : {}),
+    ...(item.notes ? { notes: item.notes } : {}),
+    ...(item.image ? { image: item.image } : {}),
+    ...(item.status ? { status: item.status } : {}),
+  }
+}
+
+function observationsForEntry(item: SpeciesItem): SpeciesObservation[] {
+  return item.observations?.length ? item.observations : [observationFromEntry(item)]
+}
+
+function observationIdentity(observation: SpeciesObservation) {
+  if (observation.id) return `id:${observation.id}`
+  return [
+    observation.dateFound || '',
+    observation.locationFound || '',
+    observation.notes || '',
+    observation.image || '',
+  ].join('|')
+}
+
+function dedupeObservations(observations: SpeciesObservation[]) {
+  const seen = new Set<string>()
+  return observations.filter((observation) => {
+    const identity = observationIdentity(observation)
+    if (seen.has(identity)) return false
+    seen.add(identity)
+    return true
+  })
+}
+
+function compendiumEntryQuality(item: SpeciesItem) {
+  return (verifiedScientificName(item.latin) ? 100 : 0)
+    + (item.identificationStatus === 'corrected' ? 12 : 0)
+    + (item.identificationStatus === 'complete' ? 8 : 0)
+    + (item.identificationStatus === 'pending' || item.identificationStatus === 'failed' ? 0 : 4)
+    + (item.image && !item.image.startsWith('blob:') ? 3 : 0)
+    + (item.locationFound ? 1 : 0)
+    + (item.notes ? 1 : 0)
+}
+
+function mergeCompendiumEntries(first: SpeciesItem, second: SpeciesItem): SpeciesItem {
+  const firstIsPreferred = compendiumEntryQuality(first) >= compendiumEntryQuality(second)
+  const preferred = firstIsPreferred ? first : second
+  const other = firstIsPreferred ? second : first
+  const observations = dedupeObservations([
+    ...observationsForEntry(first),
+    ...observationsForEntry(second),
+  ])
+  const foundDates = observations
+    .map((observation) => observation.dateFound)
+    .filter((date): date is string => Boolean(date))
+    .sort((a, b) => a.localeCompare(b))
+
+  return {
+    ...other,
+    ...preferred,
+    // Never add points from duplicate sightings: discovery points belong to the
+    // species, while every sighting is retained separately below.
+    points: Math.max(first.points || 0, second.points || 0),
+    image: preferred.image && !preferred.image.startsWith('blob:')
+      ? preferred.image
+      : (other.image || preferred.image),
+    locationFound: preferred.locationFound || other.locationFound,
+    notes: preferred.notes || other.notes,
+    observations,
+    ...(foundDates.length ? { dateFound: foundDates[0] } : {}),
+  }
+}
+
+function dedupeCompendium(items: SpeciesItem[]) {
+  const groups = new Map<string, SpeciesItem>()
+  for (const item of items) {
+    const key = compendiumSpeciesKey(item)
+    const existing = groups.get(key)
+    groups.set(key, existing ? mergeCompendiumEntries(existing, item) : item)
+  }
+  return Array.from(groups.values())
+}
+
+function realCompendiumItems(items: SpeciesItem[]) {
+  return dedupeCompendium(items.filter((item) => item.status !== 'Demonstration entry'))
+}
+
+function discoveredCompendiumItems(items: SpeciesItem[]) {
+  return realCompendiumItems(items).filter((item) =>
+    item.identificationStatus !== 'pending' &&
+    item.identificationStatus !== 'failed' &&
+    !['identifying…', 'identifying...', 'unidentified organism'].includes(normalizeTaxonText(item.name)) &&
+    !normalizeTaxonText(item.name).includes('unidentified organism')
+  ).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+type CompendiumFilter = 'All' | 'Birds' | 'Plants' | 'Insects' | 'Reptiles'
+
+function categoryMatchesFilter(item: SpeciesItem, filter: CompendiumFilter) {
+  if (filter === 'All') return true
+  const category = normalizeTaxonText(item.category)
+  if (filter === 'Birds') return category.includes('bird') || category.includes('avian')
+  if (filter === 'Plants') return category.includes('plant') || category.includes('flora')
+  if (filter === 'Insects') return category.includes('insect') || category.includes('butterfly') || category.includes('moth')
+  return category.includes('reptile') || category.includes('reptilia')
+}
+
+function Compendium({ onOpen, onTab, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; onTab: (tab: Tab) => void; items: SpeciesItem[] }) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<CompendiumFilter>('All')
+  const realItems = realCompendiumItems(items)
+  const shown = realItems.filter((item) =>
+    `${item.name} ${item.latin} ${item.category}`.toLowerCase().includes(query.toLowerCase()) &&
+    categoryMatchesFilter(item, filter)
+  )
+  const acceptedPoints = realItems
+    .filter((item) => item.identificationStatus !== 'pending' && item.identificationStatus !== 'failed')
+    .reduce((total, item) => total + (Number(item.points) || 0), 0)
+  const allObservations = realItems.flatMap(observationsForEntry)
+  const discoveriesThisMonth = allObservations.filter((observation) => {
+    if (!observation.dateFound) return false
+    const date = new Date(observation.dateFound)
+    const now = new Date()
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+  }).length
+  const filters: CompendiumFilter[] = ['All', 'Birds', 'Plants', 'Insects', 'Reptiles']
+
+  return <div className="screen">
+    <div className="page-title collection-title">
+      <div><p className="eyebrow">YOUR FIELD GUIDE</p><h1>Compendium</h1></div>
+      <div className="collection-count"><strong>{realItems.length}</strong><span>unique species</span></div>
+    </div>
+    {realItems.length > 0 && <>
+      <div className="collection-stats">
+        <div><strong>{acceptedPoints}</strong><span>recorded points</span></div>
+        <div><strong>{allObservations.length}</strong><span>sightings saved</span></div>
+        <div><strong>{discoveriesThisMonth}</strong><span>sightings this month</span></div>
+      </div>
+      <div className="searchbox"><Search size={18} /><input aria-label="Search compendium" placeholder="Search species" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+      <div className="filter-row" aria-label="Filter compendium by category">{filters.map((category) => <button type="button" key={category} className={filter === category ? 'filter active' : 'filter'} aria-pressed={filter === category} onClick={() => setFilter(category)}>{category}</button>)}</div>
+      <div className="species-grid compendium-species-scroll">
+        {shown.map((item, index) => {
+          const count = observationsForEntry(item).length
+          return <button type="button" className={`species-card rarity-${(item.rarity || 'unconfirmed').toLowerCase().replace(' ', '-')}`} key={item.id ?? `${compendiumSpeciesKey(item)}-${index}`} onClick={() => onOpen('species', item)}>
+            <div className="species-photo">{item.image ? <img src={item.image} alt={item.name} /> : <span className="species-photo-placeholder"><Leaf size={26} /></span>}<span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div>
+            <div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div>
+            <div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>
+            <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}><strong>Found {count} time{count === 1 ? '' : 's'}</strong>{item.dateFound ? ` · First: ${formatFoundDate(item.dateFound)}` : ''}</p>
+          </button>
+        })}
+      </div>
+      {!shown.length && <div className="compendium-empty"><BookOpen size={23} /><h2>No matching species</h2><p>{query.trim() ? 'Try a different search term or clear your filters.' : `No ${filter.toLowerCase()} are recorded in your Compendium yet.`}</p><button className="outline-button" onClick={() => { setQuery(''); setFilter('All') }}>Clear filters</button></div>}
+    </>}
+    {realItems.length === 0 && <div className="compendium-empty"><span className="compendium-empty-mark"><Leaf size={26} /></span><h2>Your discovered animals will appear here.</h2><p>Identify a photo or explore nearby wildlife to begin your personal field guide.</p><div className="compendium-empty-actions"><button className="dark-button" onClick={() => onTab('explore')}>Explore nearby species <ArrowRight size={15} /></button><button className="outline-button" onClick={() => onOpen('photo')}>Identify a photo <Camera size={15} /></button></div></div>}
+  </div>
+}
 
 
-
-function Community() { return <div className="screen"><div className="page-title"><p className="eyebrow">THE WILD AROUND US</p><h1>Community</h1><p>Shared discoveries from a demonstration community.</p></div><div className="leaderboard-card"><div className="leader-head"><div><span className="eyebrow light">THIS WEEK</span><h2>Field notes leaderboard</h2></div><Trophy size={25} /></div><div className="leader-row you"><span className="rank">01</span><span className="community-avatar">AM</span><div><strong>Alex Morgan <small>YOU</small></strong><span>12 species discovered</span></div><b>65 pts</b></div>{['Maya Chen', 'Theo Williams', 'Samira Patel'].map((name, i) => <div className="leader-row" key={name}><span className="rank">0{i + 2}</span><span className="community-avatar muted">{name.split(' ').map(n => n[0]).join('')}</span><div><strong>{name} <small>DEMO</small></strong><span>{10 - i * 2} species discovered</span></div><b>{58 - i * 11} pts</b></div>)}</div><div className="section-heading compact"><div><p className="eyebrow">FROM THE COMMUNITY</p><h2>Recent discoveries</h2></div><button className="icon-button"><MoreHorizontal size={19} /></button></div><div className="community-grid">{species.slice(0, 3).map((item, index) => <div className="community-photo" key={item.id ?? `${normalizeTaxonText(item.name)}-${index}`}><img src={item.image} alt={item.name} /><div><strong>{item.name}</strong><span>Shared by demo explorer</span></div></div>)}</div></div> }
-
+function Community({ items, onOpenProfile }: { items: SpeciesItem[]; onOpenProfile: () => void }) {
+  const discovered = discoveredCompendiumItems(items)
+  return <div className="screen">
+    <div className="page-title"><p className="eyebrow">THE WILD AROUND US</p><h1>Community</h1><p>Your field profile, alongside the discoveries you have recorded.</p></div>
+    <div className="leaderboard-card">
+      <div className="leader-head"><div><span className="eyebrow light">LEADERBOARD</span><h2>Field notes leaderboard</h2></div><Trophy size={25} /></div>
+      <button type="button" className="leader-row you clickable-leader-row" onClick={onOpenProfile} aria-label="Open dev_sj profile">
+        <span className="rank">01</span><span className="community-avatar">DS</span>
+        <div><strong>dev_sj <small>YOU</small></strong><span>{discovered.length} species discovered · View profile</span></div><b>300 pts</b><ArrowRight size={15} />
+      </button>
+    </div>
+    <div className="community-feed-empty"><span className="action-icon sage"><Bird size={20} /></span><h2>Community discoveries</h2><p>No shared field notes are available yet. Your personal discoveries stay in your Compendium.</p></div>
+  </div>
+}
 
 
 
@@ -853,7 +1504,7 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
       <span className="modal-icon sage"><Camera size={24} /></span>
       <p className="eyebrow">QUICK FIELD CAPTURE</p>
       <h2>Capture and keep moving.</h2>
-      <p className="modal-text">Take a photo or choose one from your gallery. WildQuest will save it now and identify it in the background, so you can keep exploring. You can correct the suggestion in your Compendium later.</p>
+      <p className="modal-text">Take a photo or choose one from your gallery. WildQuest will save it and identify it while you keep exploring. You can correct the name later.</p>
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { selectFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
       <input ref={galleryInput} type="file" accept="image/*" hidden onChange={(event) => { selectFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
       <div className="modal-options">
@@ -861,7 +1512,7 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
         <button type="button" onClick={() => galleryInput.current?.click()}><BookOpen size={19} /> Choose from gallery</button>
       </div>
       {error && <p className="modal-text" role="alert">{error}</p>}
-      <p className="modal-text" style={{ fontSize: 12, marginTop: 10 }}>Identification may take a little while. Keep WildQuest open while it works.</p>
+      <p className="modal-text" style={{ fontSize: 12, marginTop: 10 }}>Your photo may take a moment to identify.</p>
     </>
   )
 }
@@ -902,19 +1553,32 @@ function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: 
     <p className="eyebrow">COMPENDIUM ENTRY</p>
     <h2>{item.name}</h2>
     <em>{item.latin}</em>
-    <p className="modal-text">Category: {item.category}<br />Status: {item.status || 'Unverified'}<br />Rarity: {item.rarity}<br />Points: {item.points}</p>
-    {isPending && <p className="modal-text" role="status">The AI model is still identifying this photo. You can close this entry and keep exploring; the result will update here when ready.</p>}
+    <p className="modal-text">{item.category} · {item.points} points</p>{item.status && item.status.toLowerCase().includes('suggestion') && <p className="modal-text">AI identification—please check the name if it looks wrong.</p>}
+    {isPending && <p className="modal-text" role="status">Your photo is still being identified. You can close this entry and keep exploring; the result will appear here.</p>}
     {isFailed && <p className="modal-text" role="alert">Identification didn't finish. You can still add the correct name below.</p>}
     {item.dateFound && <p className="modal-text">Date found: {formatFoundDate(item.dateFound)}</p>}
     {item.locationFound && <p className="modal-text">Location: {item.locationFound}</p>}
-    {item.modelSuggestion && <p className="modal-text">Original AI suggestion: {item.modelSuggestion}</p>}
+    {item.modelSuggestion && <p className="modal-text">First suggestion: {item.modelSuggestion}</p>}
     {item.correctionNotes && <p className="modal-text">Correction note: {item.correctionNotes}</p>}
     {item.notes && <p className="modal-text">Field notes: {item.notes}</p>}
+    {(item.observations?.length || 0) > 1 && <section style={{ margin: '14px 0', textAlign: 'left' }}>
+      <p className="eyebrow">SIGHTINGS · {item.observations!.length}</p>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {item.observations!.map((observation, index) => <div key={observation.id || `${observation.dateFound || 'date'}-${index}`} style={{ display: 'grid', gridTemplateColumns: observation.image ? '64px 1fr' : '1fr', gap: 10, padding: 10, border: '1px solid #e2dccf', borderRadius: 10, background: '#fffdf8' }}>
+          {observation.image && <img src={observation.image} alt={`Sighting ${index + 1} of ${item.name}`} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 7 }} />}
+          <div style={{ display: 'grid', gap: 4, fontSize: 12, color: '#656d4a' }}>
+            <strong style={{ color: '#39412d' }}>{observation.dateFound ? formatFoundDate(observation.dateFound) : `Sighting ${index + 1}`}</strong>
+            {observation.locationFound && <span>Location: {observation.locationFound}</span>}
+            {observation.notes && <span>Notes: {observation.notes}</span>}
+          </div>
+        </div>)}
+      </div>
+    </section>}
     {!editing ? <>
       <button className="outline-button" style={{ width: '100%', margin: '8px 0' }} onClick={() => setEditing(true)}>Wrong identification? Correct it</button>
       <button className="dark-button full" onClick={onClose}>Done <ArrowRight size={15} /></button>
     </> : <div style={{ display: 'grid', gap: 10, textAlign: 'left', marginTop: 12 }}>
-      <p className="modal-text">Update this field note whenever convenient. Your correction will be saved as unverified.</p>
+      <p className="modal-text">Your correction will be saved as your note, but it will not be independently verified.</p>
       <label style={{ display: 'grid', gap: 5, fontSize: 13 }}>Correct species name
         <input value={correctedName} onChange={(event) => setCorrectedName(event.target.value)} placeholder="e.g. domestic dog" maxLength={120} style={{ width: '100%', padding: 10, border: '1px solid #d8d1c3', borderRadius: 8, background: '#fffdf8' }} />
       </label>
@@ -935,19 +1599,33 @@ function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: 
   </>
 }
 
-function Modal({ kind, close, onUpdateCompendium, onIdentifyInBackground, selectedSpecies }: {
+function ProfilePanel({ items }: { items: SpeciesItem[] }) {
+  const discovered = discoveredCompendiumItems(items)
+  return <div className="user-profile-panel">
+    <div className="user-profile-heading"><span className="user-profile-avatar">DS</span><p className="eyebrow">FIELD EXPLORER</p><h2>dev_sj</h2><p>{discovered.length} species discovered</p></div>
+    <section className="user-profile-species"><h3>Your discoveries</h3>
+      {discovered.length ? <ul>{discovered.map((item) => <li key={compendiumSpeciesKey(item)}><span>{item.name}</span>{verifiedScientificName(item.latin) && <em>{item.latin}</em>}</li>)}</ul> : <p className="modal-text">Your discovered animals will appear here after your first successful identification.</p>}
+    </section>
+  </div>
+}
+
+function Modal({ kind, close, onUpdateCompendium, onIdentifyInBackground, selectedSpecies, items, onTab, onStartQuest }: {
   kind: string
   close: () => void
   onUpdateCompendium: (item: SpeciesItem) => void
   onIdentifyInBackground: (file: File) => void
   selectedSpecies?: SpeciesItem
+  items: SpeciesItem[]
+  onTab: (tab: Tab) => void
+  onStartQuest: () => void
 }) {
   return <div className="modal-backdrop" onClick={close} style={{ overflowY: 'auto', alignItems: 'flex-start', justifyContent: 'center', padding: '16px 12px', boxSizing: 'border-box' }}>
     <div className="modal" onClick={(event) => event.stopPropagation()} style={{ maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box', margin: '0 auto' }}>
-      <button className="modal-close" onClick={close} aria-label="Close"><X size={18} /></button>
+      <button type="button" className="modal-close" onClick={close} aria-label="Close"><X size={18} /></button>
       {kind === 'photo' ? <PhotoIdentify onIdentifyInBackground={onIdentifyInBackground} />
-        : kind === 'species' ? <SpeciesDetails item={selectedSpecies || species[0]} onSave={onUpdateCompendium} onClose={close} />
-        : <><span className="modal-icon sage"><Sparkles size={24} /></span><p className="eyebrow">QUEST READY</p><h2>Begin Wildlife Explorer?</h2><p className="modal-text">Your weekly target is 150 points on Medium. Unique species discoveries award points once per quest.</p><button className="dark-button full" onClick={close}>Start exploring <ArrowRight size={15} /></button></>}
+        : kind === 'profile' ? <ProfilePanel items={items} />
+        : kind === 'species' && selectedSpecies ? <SpeciesDetails item={selectedSpecies} onSave={onUpdateCompendium} onClose={close} />
+        : <><span className="modal-icon sage"><Sparkles size={24} /></span><p className="eyebrow">QUEST READY</p><h2>Begin Wildlife Explorer?</h2><p className="modal-text">Your field session lasts up to 12 hours. Walking and new species observations can earn points.</p><button type="button" className="dark-button full" onClick={() => { close(); onStartQuest() }}>Start exploring <ArrowRight size={15} /></button></>}
     </div>
   </div>
 }
@@ -963,7 +1641,7 @@ export default function Page() {
   const [profile, setProfile] = useState(false);
   const [selectedSpecies, setSelectedSpecies] = useState<SpeciesItem | undefined>(undefined);
 
-  const [compendium, setCompendium] = useState<SpeciesItem[]>(species)
+  const [compendium, setCompendium] = useState<SpeciesItem[]>([])
   const [compendiumLoaded, setCompendiumLoaded] = useState(false)
   const [backgroundNotice, setBackgroundNotice] = useState('')
   const [questSession, setQuestSession] = useState<QuestSession>({
@@ -993,7 +1671,15 @@ export default function Page() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem('wildquest-compendium')
-      if (saved) setCompendium(JSON.parse(saved) as SpeciesItem[])
+      if (saved) {
+        const parsed: unknown = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          const validEntries = parsed.filter((entry): entry is SpeciesItem =>
+            Boolean(entry && typeof entry === 'object' && typeof (entry as SpeciesItem).name === 'string' && (entry as SpeciesItem).status !== 'Demonstration entry')
+          )
+          setCompendium(dedupeCompendium(validEntries))
+        }
+      }
     } catch (error) {
       console.warn('Could not load the saved compendium.', error)
     } finally {
@@ -1278,19 +1964,19 @@ export default function Page() {
 
   function updateCompendium(item: SpeciesItem) {
     setCompendium((current) => {
-      if (item.id) {
-        const exists = current.some((entry) => entry.id === item.id)
-        return exists
-          ? current.map((entry) => entry.id === item.id
-              ? { ...entry, ...item, image: item.image.startsWith('blob:') && !entry.image.startsWith('blob:') ? entry.image : item.image }
-              : entry)
-          : [...current, item]
+      let next: SpeciesItem[]
+      if (item.id && current.some((entry) => entry.id === item.id)) {
+        next = current.map((entry) => entry.id === item.id
+          ? {
+              ...entry,
+              ...item,
+              image: item.image.startsWith('blob:') && !entry.image.startsWith('blob:') ? entry.image : item.image,
+            }
+          : entry)
+      } else {
+        next = [item, ...current]
       }
-      const alreadyExists = current.some((entry) => entry.name.toLowerCase() === item.name.toLowerCase())
-      if (alreadyExists) {
-        return current.map((entry) => entry.name.toLowerCase() === item.name.toLowerCase() ? { ...entry, ...item } : entry)
-      }
-      return [...current, item]
+      return dedupeCompendium(next)
     })
     setModal(null)
     setProfile(false)
@@ -1313,7 +1999,7 @@ export default function Page() {
       id,
       identificationStatus: 'pending',
       name: 'Identifying…',
-      latin: 'AI is processing this photo',
+      latin: 'Name pending',
       category: 'Pending',
       points: 0,
       rarity: 'Unconfirmed',
@@ -1383,7 +2069,7 @@ export default function Page() {
       const rewardResult = awardDiscoveryIfNew(safeName, scientificName)
       const pointsAwarded = rewardResult.pointsAwarded
 
-      setCompendium((current) => current.map((entry) => {
+      setCompendium((current) => dedupeCompendium(current.map((entry) => {
         if (entry.id !== id) return entry
         // Do not overwrite a correction the user made while the AI model was processing.
         if (entry.identificationStatus === 'corrected') {
@@ -1400,7 +2086,7 @@ export default function Page() {
           modelSuggestion: safeName,
           points: pointsAwarded,
         }
-      }))
+      })))
       setBackgroundNotice(pointsAwarded
         ? `Identified ${safeName}: +${pointsAwarded} points for this discovery.`
         : rewardResult.newForQuest && rewardResult.alreadyRewardedToday
@@ -1410,7 +2096,7 @@ export default function Page() {
             : `Identification ready: ${safeName}. This taxon has already been counted in this quest, or no quest is active.`)
     } catch (error) {
       const savedImage = await imagePromise
-      setCompendium((current) => current.map((entry) => {
+      setCompendium((current) => dedupeCompendium(current.map((entry) => {
         if (entry.id !== id) return entry
         if (entry.identificationStatus === 'corrected') return { ...entry, ...(savedImage ? { image: savedImage } : {}) }
         return {
@@ -1422,11 +2108,10 @@ export default function Page() {
           status: 'Identification failed — correct it when convenient',
           identificationStatus: 'failed',
         }
-      }))
+      })))
       const message = error instanceof Error ? error.message : 'Unknown error'
       console.warn('Background identification failed:', message)
-      const shortMessage = message.length > 150 ? `${message.slice(0, 147)}…` : message
-      setBackgroundNotice(`Photo saved, but identification failed: ${shortMessage}`)
+      setBackgroundNotice('Photo saved, but we could not identify it. You can add the name yourself.')
     }
   }
 
@@ -1458,9 +2143,9 @@ export default function Page() {
           <Explore items={compendium} onSearchStatusChange={setExploreTaskStatus} />
         </div>
 
-        {tab === 'collection' && <Compendium onOpen={openModal} items={compendium} />}
+        {tab === 'collection' && <Compendium onOpen={openModal} onTab={setTab} items={compendium} />}
 
-        {tab === 'community' && <Community />}
+        {tab === 'community' && <Community items={compendium} onOpenProfile={() => setProfile(true)} />}
 
 
 
@@ -1523,6 +2208,12 @@ export default function Page() {
           onUpdateCompendium={updateCompendium}
 
           onIdentifyInBackground={identifyInBackground}
+
+          items={compendium}
+
+          onTab={setTab}
+
+          onStartQuest={startQuest}
 
           close={() => {
 
@@ -1664,7 +2355,28 @@ export default function Page() {
         .combined-context-habitats > div { display: flex; flex-wrap: wrap; gap: 6px; }
         .combined-context-habitats > div > span { padding: 5px 8px; border-radius: 99px; background: #e9eadf; color: #596548; font-size: 10px; }
         .combined-context-note { margin: 0; color: #817b6e; font-size: 10px; line-height: 1.5; }
+        .explore-data-details { margin-top: 8px; color: #817b6e; font-size: 10px; line-height: 1.5; }
+        .explore-data-details summary { cursor: pointer; color: #656d4a; font-weight: 650; }
+        .explore-data-details p { margin: 6px 0; }
+        .nearby-results-note { font-size: 11px; margin-top: 10px; }
         @media (max-width: 380px) { .combined-context-heading { align-items: flex-start; flex-direction: column; } }
+        .explore-source-checks { display: grid; gap: 0; margin: 16px 0; padding: 14px; border: 1px solid #e5dfd2; border-radius: 15px; background: #fffdf8; }
+        .explore-source-checks-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 9px; }
+        .explore-source-checks-head .eyebrow { margin: 0; font-size: 9px; }
+        .explore-source-checks-head h2 { margin: 3px 0 0; color: #303a27; font-size: 15px; }
+        .explore-source-checks-head > span { flex: 0 0 auto; padding: 5px 8px; border-radius: 99px; background: #e9eadf; color: #596548; font-size: 9px; font-weight: 750; }
+        .explore-source-check-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; padding: 10px 0; border-top: 1px solid #ede8dd; }
+        .explore-source-check-row > div { display: grid; gap: 3px; min-width: 0; }
+        .explore-source-check-row strong { color: #303a27; font-size: 12px; }
+        .explore-source-check-row small { color: #817b6e; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+        .source-check-status { flex: 0 0 auto; max-width: 92px; padding: 5px 7px; border-radius: 99px; background: #ede9df; color: #6b685d; font-size: 9px; font-weight: 800; text-align: center; }
+        .source-check-status.success { color: #355a38; background: #e1eddd; }
+        .source-check-status.running { color: #5b633d; background: #eef0d9; }
+        .source-check-status.failed { color: #8a3f34; background: #f5e3dc; }
+        .source-check-status.fallback, .source-check-status.partial { color: #8a5c20; background: #f4ead5; }
+        .source-check-status.skipped, .source-check-status.waiting { color: #777668; background: #eeece6; }
+        .explore-source-check-note { margin: 8px 0 0; color: #817b6e; font-size: 10px; line-height: 1.5; }
+        @media (max-width: 370px) { .explore-source-check-row { flex-direction: column; } .source-check-status { align-self: flex-start; } }
         .nearby-species-list { display: grid; gap: 0; margin-top: 4px; }
         .nearby-species-card { border-bottom: 1px solid #e6dfd1; }
         .nearby-species-row { display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; padding: 12px 0; }
@@ -1679,6 +2391,9 @@ export default function Page() {
         .nearby-species-main > strong { max-width: 100%; overflow-wrap: anywhere; color: #303a27; font-size: 14px; line-height: 1.3; }
         .nearby-species-main > em { max-width: 100%; overflow-wrap: anywhere; color: #817b6e; font-size: 11px; font-style: normal; line-height: 1.35; }
         .nearby-species-main > small { color: #817b6e; font-size: 10px; }
+        .nearby-where-to-look { display: flex; align-items: flex-start; gap: 4px; max-width: 100%; margin-top: 2px; color: #526344; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+        .nearby-where-to-look > svg { flex: 0 0 auto; margin-top: 1px; }
+        .nearby-where-to-look b { font-weight: 750; }
         .nearby-priority-label { display: inline-flex; margin-top: 2px; padding: 3px 7px; border-radius: 99px; background: #e9eadf; color: #596548; font-size: 9px; font-weight: 700; }
         .nearby-species-chevron { flex: 0 0 auto; color: #596548; transition: transform .18s ease; }
         .nearby-species-trigger[aria-expanded="true"] .nearby-species-chevron { transform: rotate(90deg); }
@@ -1717,6 +2432,193 @@ export default function Page() {
         .compendium-species-scroll .species-card { flex: 0 0 min(72%, 260px); width: min(72%, 260px); min-width: 0; scroll-snap-align: start; }
         .compendium-species-scroll .species-photo { height: 174px; }
         @media (min-width: 700px) { .compendium-species-scroll .species-card { flex-basis: 250px; width: 250px; } }
+
+        /* Compact Explore landing: put nearby discovery first while bringing seasonal events into the first viewport. */
+        .explore-landing-title { margin-bottom: 8px; }
+        .explore-landing-title .eyebrow { margin-bottom: 3px; }
+        .explore-landing-title h1 { margin: 0 0 4px; font-size: 25px; line-height: 1.08; letter-spacing: -.035em; }
+        .explore-landing-title > p:last-child { margin: 0; font-size: 11px; line-height: 1.4; }
+        .explore-local-panel { margin: 8px 0 12px; padding: 11px 12px 12px; }
+        .explore-local-panel .explore-module-heading { margin-bottom: 8px; }
+        .explore-local-panel .explore-module-heading h2 { font-size: 17px; line-height: 1.15; }
+        .explore-local-panel .explore-module-heading p:not(.eyebrow) { margin-top: 3px; font-size: 10px; line-height: 1.35; }
+        .explore-local-panel .explore-module-icon { flex-basis: 34px; width: 34px; height: 34px; }
+        .explore-local-panel .explore-map-wrap { height: clamp(118px, 30vw, 148px); }
+        .explore-local-panel .explore-map-empty { min-height: 118px; gap: 5px; padding: 12px; }
+        .explore-local-panel .explore-map-empty-icon { width: 35px; height: 35px; }
+        .explore-local-panel .explore-map-empty strong { font-size: 12px; }
+        .explore-local-panel .explore-map-empty > span:last-child { max-width: 280px; font-size: 10px; line-height: 1.35; }
+        .explore-local-panel .map-footer { padding-top: 9px; padding-bottom: 9px; }
+        .explore-results-panel { position: relative; margin: 12px 0 18px; padding: 12px 0 0; border-top: 1px solid #e3dece; }
+        .explore-events-panel { margin-top: 12px; }
+
+        /* Separate seasonal events from live nearby exploration without changing either feature's logic. */
+        .explore-feature-panel { position: relative; margin: 12px 0 18px; padding: 16px 13px; border: 1px solid #e3dece; border-radius: 22px; background: rgba(255,253,248,.62); box-shadow: 0 5px 18px rgba(47,54,38,.035); transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease; }
+        .explore-feature-panel:hover { transform: translateY(-2px); border-color: #cbd1b7; background: rgba(255,253,248,.92); box-shadow: 0 12px 27px rgba(47,54,38,.075); }
+        .explore-feature-panel:focus-within { border-color: #a8b68d; box-shadow: 0 0 0 3px rgba(168,182,141,.18), 0 10px 25px rgba(47,54,38,.06); }
+        .seasonal-events-section { margin: 8px 0 18px; }
+        .explore-module-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+        .explore-module-heading .eyebrow { margin: 0 0 5px; }
+        .explore-module-heading h2 { margin: 0; color: #303a27; font-size: 21px; line-height: 1.12; letter-spacing: -.035em; }
+        .explore-module-heading p:not(.eyebrow) { margin: 6px 0 0; max-width: 390px; color: #827d70; font-size: 11px; line-height: 1.5; }
+        .explore-module-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid #e3e3d4; border-radius: 13px; color: #536746; background: #e9eadf; transition: transform .22s ease, background .22s ease; }
+        .explore-feature-panel:hover .explore-module-icon { transform: translateY(-2px) rotate(-3deg); background: #dfe5d0; }
+        .explore-local-panel .explore-map-card { margin-top: 0; }
+        /* Seasonal event collection: event cards are data-driven so new event objects can be added without layout changes. */
+        .event-section-heading { margin-bottom: 5px; }
+        .event-section-heading .eyebrow { font-size: 13px; letter-spacing: .12em; }
+        .event-section-heading h2 { margin-bottom: 0; }
+        .event-section-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border: 1px solid #e7e1d4; border-radius: 13px; color: #60744d; background: #f8f5ed; }
+        .event-section-intro { margin: 0 0 13px; color: #827d70; font-size: 12px; line-height: 1.5; }
+        .event-featured-list { display: grid; gap: 12px; }
+        .event-featured-card { position: relative; display: flex; width: 100%; min-height: 272px; flex-direction: column; justify-content: space-between; padding: 16px; overflow: hidden; border: 0; border-radius: 21px; background: #293c30; color: #fffdf5; text-align: left; cursor: pointer; isolation: isolate; box-shadow: 0 9px 24px rgba(35,48,30,.13); }
+        .event-featured-card:focus-visible { outline: 3px solid #a6b98a; outline-offset: 3px; }
+        .event-featured-image, .event-featured-shade { position: absolute; z-index: -1; inset: 0; width: 100%; height: 100%; }
+        .event-featured-image { object-fit: cover; transition: transform .6s ease; }
+        .event-featured-card:hover .event-featured-image { transform: scale(1.035); }
+        .event-featured-shade { background: linear-gradient(180deg, rgba(15,28,23,.48) 0%, rgba(15,28,23,.10) 32%, rgba(15,28,23,.83) 100%); }
+        .event-featured-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+        .event-featured-top > span { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.23); border-radius: 99px; background: rgba(20,32,25,.32); color: #fffdf5; font-size: 9px; font-weight: 800; letter-spacing: .08em; backdrop-filter: blur(8px); }
+        .event-featured-top .event-featured-live { background: #e4e9d2; border-color: #e4e9d2; color: #34482e; }
+        .event-featured-copy { display: grid; gap: 8px; }
+        .event-featured-location { display: flex; align-items: center; gap: 5px; color: #edf1e2; font-size: 10px; font-weight: 700; }
+        .event-featured-copy > strong { max-width: 340px; font-size: clamp(25px, 6vw, 35px); letter-spacing: -.045em; line-height: .99; }
+        .event-featured-copy > em { max-width: 345px; color: #f5f2e8; font-family: Georgia, serif; font-size: 14px; line-height: 1.4; }
+        .event-featured-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; color: #e1e7d5; font-size: 10px; font-weight: 700; }
+        .event-featured-cta { display: inline-flex; align-items: center; gap: 6px; padding: 9px 11px; border-radius: 99px; color: #2e432e; background: #f6f3e7; font-size: 10px; font-weight: 800; white-space: nowrap; }
+        .event-future-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 12px; border: 1px dashed #dcd6c7; border-radius: 14px; background: rgba(255,253,248,.58); }
+        .event-future-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; color: #657452; background: #e9eadf; }
+        .event-future-note strong { display: block; color: #464d38; font-size: 11px; }
+        .event-future-note p { margin: 3px 0 0; color: #898273; font-size: 10px; line-height: 1.45; }
+        .event-readme-section { display: grid; gap: 13px; margin: 0 0 17px; padding: 15px; border: 1px solid #e0e3d3; border-radius: 18px; background: linear-gradient(145deg, #f0f2e7, #fffdf8 68%); }
+        .event-readme-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .event-readme-heading .eyebrow { margin: 0 0 5px; }
+        .event-readme-heading h2 { margin: 0; color: #303a27; font-size: 21px; line-height: 1.08; letter-spacing: -.035em; }
+        .event-readme-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 13px; background: #e1e6d4; color: #536746; }
+        .event-readme-intro { margin: 0; color: #6f7564; font-size: 12px; line-height: 1.7; }
+        .event-readme-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+        .event-readme-stats > div { display: grid; align-content: start; gap: 4px; padding: 12px; border: 1px solid #e7e6d9; border-radius: 13px; background: rgba(255,253,248,.88); }
+        .event-readme-stat-icon { display: grid; place-items: center; width: 29px; height: 29px; margin-bottom: 3px; border-radius: 9px; background: #e8eadc; color: #596d4b; }
+        .event-readme-stats strong { color: #34442d; font-size: 17px; letter-spacing: -.025em; }
+        .event-readme-stats small { color: #817b6e; font-size: 10px; line-height: 1.4; }
+        .event-readme-explainer-grid { display: grid; gap: 9px; }
+        .event-readme-card { display: grid; gap: 7px; padding: 12px; border: 1px solid #e6e3d7; border-radius: 13px; background: rgba(255,253,248,.72); }
+        .event-readme-card-icon { display: grid; place-items: center; width: 31px; height: 31px; border-radius: 10px; color: #576a48; background: #e7eadc; }
+        .event-readme-card h3, .event-readme-subheading h3 { margin: 0; color: #3e4b34; font-size: 13px; }
+        .event-readme-card p { margin: 0; color: #737465; font-size: 11px; line-height: 1.65; }
+        .event-readme-threats, .event-readme-help { display: grid; gap: 10px; padding-top: 2px; }
+        .event-readme-subheading { display: flex; align-items: center; gap: 9px; }
+        .event-readme-subheading > div > .eyebrow { margin: 0 0 3px; font-size: 8px; }
+        .event-readme-threat-grid { display: grid; gap: 8px; }
+        .event-readme-threat-grid article { padding: 10px; border-left: 3px solid #b2bd97; border-radius: 0 10px 10px 0; background: rgba(234,235,222,.65); }
+        .event-readme-threat-grid strong { display: block; margin-bottom: 3px; color: #47513b; font-size: 11px; }
+        .event-readme-threat-grid p { margin: 0; color: #777768; font-size: 10px; line-height: 1.55; }
+        .event-readme-caveat { margin: 0; color: #898373; font-size: 9px; line-height: 1.5; }
+        .event-readme-help ul { display: grid; gap: 8px; margin: 0; padding-left: 18px; color: #707563; font-size: 10px; line-height: 1.55; }
+        .event-readme-sources { display: grid; gap: 8px; padding-top: 11px; border-top: 1px solid #e4e3d7; }
+        .event-readme-sources > span { color: #8a8576; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+        .event-readme-sources a { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #596c49; font-size: 10px; font-weight: 750; text-decoration: none; }
+        .event-readme-sources a:hover { text-decoration: underline; }
+        .event-more-species { margin: 13px 0 0; padding: 10px; border-radius: 11px; color: #516146; background: #e9ecdf; font-size: 11px; font-weight: 750; line-height: 1.5; text-align: center; }
+        .event-detail-screen { padding-bottom: 28px; }
+        .event-back-button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 0 12px; border: 0; background: transparent; color: #63734e; font-size: 12px; font-weight: 800; cursor: pointer; }
+        .event-detail-hero { position: relative; display: flex; min-height: 350px; align-items: flex-end; overflow: hidden; border-radius: 22px; background: #243a2e; color: #fffdf5; isolation: isolate; }
+        .event-detail-hero > img, .event-detail-hero-shade { position: absolute; z-index: -1; inset: 0; width: 100%; height: 100%; }
+        .event-detail-hero > img { object-fit: cover; }
+        .event-detail-hero-shade { background: linear-gradient(180deg, rgba(18,31,24,.12) 0%, rgba(18,31,24,.10) 25%, rgba(18,31,24,.88) 100%); }
+        .event-detail-hero-content { display: grid; width: 100%; gap: 10px; padding: 21px; }
+        .event-detail-kicker { display: inline-flex; align-items: center; gap: 6px; color: #e3ead6; font-size: 9px; font-weight: 850; letter-spacing: .13em; }
+        .event-detail-hero h1 { max-width: 450px; margin: 0; color: #fffdf5; font-size: clamp(34px, 8vw, 48px); line-height: .97; letter-spacing: -.055em; }
+        .event-detail-quote { max-width: 410px; margin: 0; color: #f1eedf; font-family: Georgia, serif; font-size: 16px; line-height: 1.42; }
+        .event-detail-pills { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 3px; }
+        .event-detail-pills span { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.27); border-radius: 99px; background: rgba(20,32,25,.32); color: #fffdf5; font-size: 9px; font-weight: 700; backdrop-filter: blur(8px); }
+        .event-intro-row { display: grid; gap: 8px; padding: 22px 2px 20px; }
+        .event-intro-row .eyebrow { margin: 0 0 5px; }
+        .event-intro-row h2, .event-checklist-heading h2 { margin: 0; color: #303a27; font-size: 22px; letter-spacing: -.035em; line-height: 1.1; }
+        .event-intro-row > p { margin: 0; color: #787465; font-size: 12px; line-height: 1.65; }
+        .event-checklist-section { padding: 16px 13px 13px; border: 1px solid #e8e2d6; border-radius: 18px; background: rgba(255,253,248,.85); }
+        .event-checklist-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 13px; }
+        .event-checklist-heading .eyebrow { margin: 0 0 5px; }
+        .event-checklist-heading h2 { font-size: 20px; }
+        .event-checklist-heading p:not(.eyebrow) { margin: 5px 0 0; color: #827d70; font-size: 10px; line-height: 1.5; }
+        .event-count { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 7px 9px; border-radius: 99px; background: #e9eadf; color: #536446; font-size: 10px; font-weight: 800; }
+        .event-species-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; }
+        .event-species-card { min-width: 0; overflow: hidden; border-radius: 12px; border: 1px solid #ece6da; background: #fffef9; }
+        .event-species-photo { position: relative; aspect-ratio: 1.15 / 1; overflow: hidden; background: linear-gradient(135deg,#e2e6d6,#b9c9b1); }
+        .event-species-photo > img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
+        .event-species-card:hover .event-species-photo > img { transform: scale(1.05); }
+        .event-species-photo-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #657652; }
+        .event-species-photo-fallback svg { width: 30px; height: 30px; }
+        .event-species-group-icon { position: absolute; right: 6px; bottom: 6px; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid rgba(255,255,255,.65); border-radius: 8px; color: #314432; background: rgba(255,253,245,.92); }
+        .event-species-name { display: grid; gap: 3px; padding: 8px 7px 9px; }
+        .event-species-name strong { display: -webkit-box; overflow: hidden; color: #38402d; font-size: 10px; font-weight: 800; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .event-species-name span { color: #858071; font-size: 9px; }
+        .event-photo-loading { display: flex; align-items: center; gap: 7px; margin: 12px 0 0; color: #817b6e; font-size: 10px; }
+        .event-photo-loading > span { width: 8px; height: 8px; border-radius: 50%; background: #778660; box-shadow: 0 0 0 4px #e7e9dc; }
+        .event-species-note { margin: 13px 0 0; padding-top: 11px; border-top: 1px solid #ece6da; color: #817b6e; font-size: 10px; line-height: 1.6; }
+        .event-field-note { display: flex; align-items: flex-start; gap: 11px; margin-top: 13px; padding: 14px; border-radius: 15px; background: #e9eadf; }
+        .event-field-note > span { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 11px; color: #526448; background: #f8f6ed; }
+        .event-field-note strong { color: #435039; font-size: 12px; }
+        .event-field-note p { margin: 4px 0 0; color: #707563; font-size: 10px; line-height: 1.55; }
+        .event-sources { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 13px; color: #888172; font-size: 9px; }
+        .event-sources a { display: inline-flex; align-items: center; gap: 4px; color: #5e724d; font-size: 10px; font-weight: 800; text-decoration: none; }
+        @media (min-width: 620px) { .event-featured-card { min-height: 315px; padding: 21px; } .event-detail-hero { min-height: 410px; } .event-species-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; } .event-species-name strong { font-size: 12px; } .event-intro-row { grid-template-columns: 1fr 1.1fr; align-items: start; gap: 18px; } .event-readme-explainer-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .event-readme-threat-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .explore-feature-panel { padding: 18px; } }
+        @media (max-width: 350px) { .event-species-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .event-featured-bottom { align-items: flex-start; flex-direction: column; } .event-featured-card { min-height: 300px; } .event-detail-hero-content { padding: 17px; } }
+        @media (prefers-reduced-motion: reduce) { .explore-feature-panel, .explore-module-icon, .event-featured-image, .event-species-photo > img { transition: none !important; } .explore-feature-panel:hover { transform: none; } }
+        .home-explore-banner { margin-top: 2px; }
+        .home-explore-banner > img { object-position: center 42%; }
+        /* Keep the first Explore card compact even where generic feature-panel styles are declared later. */
+        .explore-local-panel { margin: 8px 0 12px; padding: 11px 12px 12px; }
+        .explore-local-panel .explore-module-heading { margin-bottom: 8px; }
+        .explore-local-panel .explore-module-heading h2 { font-size: 17px; line-height: 1.15; }
+        .explore-local-panel .explore-module-heading p:not(.eyebrow) { margin-top: 3px; font-size: 10px; line-height: 1.35; }
+        .explore-local-panel .explore-module-icon { flex-basis: 34px; width: 34px; height: 34px; }
+        .explore-local-panel .explore-map-wrap { height: clamp(118px, 30vw, 148px); }
+        .explore-local-panel .explore-map-empty { min-height: 118px; gap: 5px; padding: 12px; }
+        .explore-local-panel .explore-map-empty-icon { width: 35px; height: 35px; }
+        .explore-local-panel .explore-map-empty strong { font-size: 12px; }
+        .explore-local-panel .explore-map-empty > span:last-child { max-width: 280px; font-size: 10px; line-height: 1.35; }
+        .explore-local-panel .map-footer { padding-top: 9px; padding-bottom: 9px; }
+        .explore-complete-hint { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; padding: 11px 12px; border: 1px solid #d7dfc8; border-radius: 13px; background: #f0f3e8; color: #34412b; animation: explore-hint-in .22s ease-out both; }
+        .explore-complete-mark { display: grid; place-items: center; flex: 0 0 25px; width: 25px; height: 25px; border-radius: 50%; background: #34412b; color: #fffdf8; font-size: 14px; font-weight: 800; }
+        .explore-complete-hint > div { display: grid; gap: 3px; min-width: 0; }
+        .explore-complete-hint strong { font-size: 12px; line-height: 1.25; }
+        .explore-complete-hint span:last-child { color: #6c735f; font-size: 11px; line-height: 1.4; }
+        @keyframes explore-hint-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+        .explore-results-panel { position: relative; margin: 12px 0 18px; padding: 12px 0 0; border-top: 1px solid #e3dece; }
+        .home-compendium-empty { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 14px; border: 1px dashed #d9d8c8; border-radius: 13px; color: #737764; font-size: 12px; }
+        .home-compendium-empty > svg { color: #657552; flex: 0 0 auto; }
+        .home-compendium-empty .text-link { margin-left: auto; }
+        .compendium-empty { display: grid; justify-items: center; gap: 9px; margin-top: 14px; padding: 30px 18px; border: 1px dashed #d7d8c6; border-radius: 18px; background: rgba(255,253,248,.72); text-align: center; }
+        .compendium-empty-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; color: #5c704b; background: #e6eadb; }
+        .compendium-empty h2 { margin: 0; color: #39442f; font-size: 19px; line-height: 1.2; }
+        .compendium-empty p { max-width: 300px; margin: 0; color: #747768; font-size: 12px; line-height: 1.6; }
+        .compendium-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 5px; }
+        .species-photo-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #647650; background: #e9ecdf; }
+        .clickable-leader-row { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; text-align: left; font: inherit; cursor: pointer; transition: background .18s ease, transform .18s ease; }
+        .clickable-leader-row:hover, .clickable-leader-row:focus-visible { background: rgba(232,235,220,.78); outline: 2px solid #cbd3b9; outline-offset: -2px; }
+        .clickable-leader-row:hover { transform: translateY(-1px); }
+        .clickable-leader-row > div { flex: 1; min-width: 0; }
+        .clickable-leader-row > b { white-space: nowrap; }
+        .clickable-leader-row > svg { flex: 0 0 auto; color: #647650; }
+        .community-feed-empty { display: grid; justify-items: start; gap: 8px; margin-top: 18px; padding: 18px; border: 1px solid #e4e3d7; border-radius: 16px; background: rgba(255,253,248,.78); }
+        .community-feed-empty h2 { margin: 0; color: #3d4932; font-size: 17px; }
+        .community-feed-empty p { margin: 0; color: #777967; font-size: 12px; line-height: 1.55; }
+        .user-profile-panel { display: grid; gap: 16px; }
+        .user-profile-heading { display: grid; justify-items: center; gap: 6px; padding: 15px 0; text-align: center; }
+        .user-profile-avatar { display: grid; place-items: center; width: 64px; height: 64px; border: 3px solid #e1e6d4; border-radius: 50%; background: #35432e; color: #fffdf5; font-size: 19px; font-weight: 850; }
+        .user-profile-heading .eyebrow { margin: 5px 0 0; }
+        .user-profile-heading h2 { margin: 0; color: #303a27; font-size: 25px; }
+        .user-profile-heading > p:last-child { margin: 0; color: #6e7562; font-size: 12px; }
+        .user-profile-species { display: grid; gap: 10px; text-align: left; }
+        .user-profile-species h3 { margin: 0; color: #3f4934; font-size: 14px; }
+        .user-profile-species ul { display: grid; gap: 0; max-height: 42vh; overflow-y: auto; margin: 0; padding: 0; list-style: none; border: 1px solid #e5e2d7; border-radius: 12px; }
+        .user-profile-species li { display: grid; gap: 3px; padding: 10px 12px; border-bottom: 1px solid #eeece4; }
+        .user-profile-species li:last-child { border-bottom: 0; }
+        .user-profile-species li span { color: #3c4632; font-size: 12px; font-weight: 750; }
+        .user-profile-species li em { color: #888170; font-size: 10px; }
+        @media (prefers-reduced-motion: reduce) { .clickable-leader-row { transition: none; } .clickable-leader-row:hover { transform: none; } }
+
       `}</style>
 
     </main>

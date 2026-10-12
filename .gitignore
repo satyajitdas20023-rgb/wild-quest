@@ -26,3 +26,4 @@ __pycache__/
 # Environment secrets
 .env
 backend/.env
+text.txt
