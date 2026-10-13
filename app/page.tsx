@@ -6,7 +6,10 @@
 
 
 
+
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Camera as CapacitorCamera, CameraDirection, CameraResultType, CameraSource } from '@capacitor/camera'
 
 import {
 
@@ -63,6 +66,8 @@ import {
 } from 'lucide-react'
 
 
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '')
 
 type Tab = 'home' | 'quests' | 'explore' | 'collection' | 'community'
 
@@ -795,7 +800,7 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     if (photoLookupAttemptsRef.current.has(cardKey)) return
     photoLookupAttemptsRef.current.add(cardKey)
     try {
-      const response = await fetch(`http://127.0.0.1:5000/explore/photo?scientificName=${encodeURIComponent(item.scientificName || item.name)}`)
+      const response = await fetch(`${API_BASE_URL}/explore/photo?scientificName=${encodeURIComponent(item.scientificName || item.name)}`)
       const payload = await response.json()
       if (response.ok && typeof payload.photo === 'string' && payload.photo.startsWith('https://')) {
         setFallbackPhotoUrls((current) => ({ ...current, [cardKey]: { url: payload.photo, source: String(payload.photoSource || 'Taxon reference photo'), attribution: String(payload.photoAttribution || '') } }))
@@ -847,13 +852,13 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
       setExpandedSpeciesKey(null)
       setLocationLabel(`${latitude.toFixed(4)}, ${longitude.toFixed(4)} · GPS`)
       setLoadingStage('Looking for wildlife and nearby habitats…')
-      const habitatRequest = fetch(`http://127.0.0.1:5000/explore/habitat?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`)
+      const habitatRequest = fetch(`${API_BASE_URL}/explore/habitat?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`)
         .then(async (response) => {
           const payload = await response.json()
           if (!response.ok) throw new Error(payload.error || 'Could not retrieve ESA WorldCover habitat data.')
           return payload as NearbyHabitat
         })
-      const speciesRequest = fetch('http://127.0.0.1:5000/explore/nearby', {
+      const speciesRequest = fetch(`${API_BASE_URL}/explore/nearby`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -905,7 +910,7 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
           if (candidates.length > 0 && habitatResult.status === 'fulfilled') {
             setLoadingStage('Choosing wildlife for you…')
             try {
-              const recommendationResponse = await fetch('http://127.0.0.1:5000/explore/recommend', {
+              const recommendationResponse = await fetch(`${API_BASE_URL}/explore/recommend`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1486,6 +1491,7 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
   const cameraInput = useRef<HTMLInputElement>(null)
   const galleryInput = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
+  const [openingCamera, setOpeningCamera] = useState(false)
 
   function selectFile(selected?: File) {
     setError('')
@@ -1494,9 +1500,44 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
       setError('Please select a valid image file.')
       return
     }
-    // Queue immediately: the parent saves a pending Compendium entry, starts the
-    // upload, closes this modal, and lets the user continue exploring.
     onIdentifyInBackground(selected)
+  }
+
+  async function takePhoto() {
+    setError('')
+    if (!Capacitor.isNativePlatform()) {
+      // On mobile browsers, capture=environment asks the browser to launch the rear camera.
+      cameraInput.current?.click()
+      return
+    }
+
+    setOpeningCamera(true)
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 88,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Camera,
+        direction: CameraDirection.Rear,
+        correctOrientation: true,
+        saveToGallery: false,
+      })
+      if (!photo.webPath) throw new Error('The camera did not return a photo. Please try again.')
+      const response = await fetch(photo.webPath)
+      if (!response.ok) throw new Error('Could not read the captured photo. Please try again.')
+      const blob = await response.blob()
+      const mimeType = blob.type.startsWith('image/') ? blob.type : 'image/jpeg'
+      const extension = photo.format || (mimeType.includes('png') ? 'png' : 'jpeg')
+      const file = new File([blob], `wildquest-${Date.now()}.${extension}`, { type: mimeType, lastModified: Date.now() })
+      onIdentifyInBackground(file)
+    } catch (cameraError) {
+      const message = cameraError instanceof Error ? cameraError.message : String(cameraError || '')
+      if (/cancel|cancelled|canceled/i.test(message)) return
+      console.error('Native camera failed:', cameraError)
+      setError('Could not open the camera. Check camera permission and try again.')
+    } finally {
+      setOpeningCamera(false)
+    }
   }
 
   return (
@@ -1504,15 +1545,15 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
       <span className="modal-icon sage"><Camera size={24} /></span>
       <p className="eyebrow">QUICK FIELD CAPTURE</p>
       <h2>Capture and keep moving.</h2>
-      <p className="modal-text">Take a photo or choose one from your gallery. WildQuest will save it and identify it while you keep exploring. You can correct the name later.</p>
+      <p className="modal-text">Photograph an animal, plant or fungus. Photos of people and everyday objects will not be added.</p>
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { selectFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
       <input ref={galleryInput} type="file" accept="image/*" hidden onChange={(event) => { selectFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
       <div className="modal-options">
-        <button type="button" onClick={() => cameraInput.current?.click()}><Camera size={19} /> Take a photo</button>
+        <button type="button" onClick={() => void takePhoto()} disabled={openingCamera}><Camera size={19} /> {openingCamera ? 'Opening camera…' : 'Take a photo'}</button>
         <button type="button" onClick={() => galleryInput.current?.click()}><BookOpen size={19} /> Choose from gallery</button>
       </div>
       {error && <p className="modal-text" role="alert">{error}</p>}
-      <p className="modal-text" style={{ fontSize: 12, marginTop: 10 }}>Your photo may take a moment to identify.</p>
+      <p className="modal-text" style={{ fontSize: 12, marginTop: 10 }}>WildQuest checks the photo before adding a discovery.</p>
     </>
   )
 }
@@ -1994,44 +2035,23 @@ export default function Page() {
       : `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const now = new Date()
     const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-    const temporaryImage = URL.createObjectURL(file)
-    const pendingEntry: SpeciesItem = {
-      id,
-      identificationStatus: 'pending',
-      name: 'Identifying…',
-      latin: 'Name pending',
-      category: 'Pending',
-      points: 0,
-      rarity: 'Unconfirmed',
-      image: temporaryImage,
-      status: 'Identification pending',
-      dateFound: localDate,
-    }
 
-    setCompendium((current) => [pendingEntry, ...current])
     setModal(null)
     setProfile(false)
     setSelectedSpecies(undefined)
-    setBackgroundNotice('Photo saved to your Compendium. Identifying in the background…')
+    setBackgroundNotice('Checking the photo… It will be added only if it shows a valid biodiversity subject.')
 
-    // Save a compact image data URL for local persistence. This runs independently
-    // of the AI request so users aren't held up by either operation.
-    const imagePromise = makeSmallImageDataUrl(file)
-      .then((image) => {
-        patchCompendiumEntry(id, { image })
-        URL.revokeObjectURL(temporaryImage)
-        return image
-      })
-      .catch((error) => {
-        console.warn('Could not prepare a persistent thumbnail.', error)
-        return undefined
-      })
+    // Do not create a Compendium row while the model is still deciding what is in the image.
+    const imagePromise = makeSmallImageDataUrl(file).catch((error) => {
+      console.warn('Could not prepare a persistent thumbnail.', error)
+      return undefined
+    })
 
     try {
       const formData = new FormData()
       formData.append('image', file)
       formData.append('category', 'auto')
-      const response = await fetch('http://127.0.0.1:5000/identify/image', { method: 'POST', body: formData })
+      const response = await fetch(`${API_BASE_URL}/identify/image`, { method: 'POST', body: formData })
       let data: {
         error?: string
         details?: string
@@ -2040,6 +2060,9 @@ export default function Page() {
         scientific_name?: string
         category?: string
         organism_group?: string
+        valid_subject?: boolean
+        subject_type?: string
+        rejected?: boolean
         predictions?: Array<{ species?: string; scientific_name?: string }>
       }
       try {
@@ -2047,71 +2070,63 @@ export default function Page() {
       } catch {
         throw new Error(`The backend returned an unreadable response (HTTP ${response.status}).`)
       }
+
+      if (data.rejected === true || response.status === 422) {
+        setBackgroundNotice(data.error || 'This photo does not clearly show an animal, plant or fungus, so it was not added to your Compendium.')
+        return
+      }
       if (!response.ok) {
         const message = data.error || `Identification failed (HTTP ${response.status}).`
-        // Preserve technical details in DevTools without turning an expected API failure
-        // into a fatal-looking Next.js console error overlay.
-        console.warn('WildQuest identification API returned an error:', {
-          status: response.status,
-          message,
-          details: data.details,
-        })
+        console.warn('WildQuest identification API returned an error:', { status: response.status, message, details: data.details })
         throw new Error(message)
       }
 
+      // Fail closed when the backend does not explicitly confirm a biodiversity subject.
+      const subjectType = String(data.subject_type || '').trim().toLowerCase()
+      if (data.valid_subject !== true || !['animal', 'plant', 'fungus'].includes(subjectType)) {
+        setBackgroundNotice('WildQuest could not confirm an animal, plant or fungus in this photo. It was not added to your Compendium.')
+        return
+      }
+
       const firstPrediction = Array.isArray(data.predictions) ? data.predictions[0] : undefined
-      const rawName = String(data.species || firstPrediction?.species || data.common_name || 'Unidentified organism')
+      const rawName = String(data.species || firstPrediction?.species || data.common_name || '').trim()
+      if (!rawName || /^(person|human|chair|table|phone|laptop|car|building|unknown object|unidentified object)$/i.test(rawName)) {
+        setBackgroundNotice('This photo does not show a valid wildlife discovery, so it was not added to your Compendium.')
+        return
+      }
+
       const suggestedName = cleanSpeciesName(rawName)
       const categoryValue = String(data.category || data.organism_group || 'other')
       const scientificName = String(data.scientific_name || firstPrediction?.scientific_name || knownScientificName(suggestedName))
       const savedImage = await imagePromise
       const safeName = suggestedName.charAt(0).toUpperCase() + suggestedName.slice(1)
       const rewardResult = awardDiscoveryIfNew(safeName, scientificName)
-      const pointsAwarded = rewardResult.pointsAwarded
+      const newEntry: SpeciesItem = {
+        id,
+        name: safeName,
+        latin: scientificName,
+        category: humanCategory(categoryValue),
+        points: rewardResult.pointsAwarded,
+        rarity: 'Unconfirmed',
+        image: savedImage || '',
+        status: 'AI suggestion — review when convenient',
+        identificationStatus: 'complete',
+        modelSuggestion: safeName,
+        dateFound: localDate,
+      }
+      setCompendium((current) => dedupeCompendium([newEntry, ...current]))
 
-      setCompendium((current) => dedupeCompendium(current.map((entry) => {
-        if (entry.id !== id) return entry
-        // Do not overwrite a correction the user made while the AI model was processing.
-        if (entry.identificationStatus === 'corrected') {
-          return { ...entry, ...(savedImage ? { image: savedImage } : {}), modelSuggestion: suggestedName }
-        }
-        return {
-          ...entry,
-          name: safeName,
-          latin: scientificName,
-          category: humanCategory(categoryValue),
-          ...(savedImage ? { image: savedImage } : {}),
-          status: 'AI suggestion — review when convenient',
-          identificationStatus: 'complete',
-          modelSuggestion: safeName,
-          points: pointsAwarded,
-        }
-      })))
-      setBackgroundNotice(pointsAwarded
-        ? `Identified ${safeName}: +${pointsAwarded} points for this discovery.`
+      setBackgroundNotice(rewardResult.pointsAwarded
+        ? `Identified ${safeName}: +${rewardResult.pointsAwarded} points for this discovery.`
         : rewardResult.newForQuest && rewardResult.alreadyRewardedToday
           ? `Identified ${safeName}. Saved to Compendium, but this species has already earned points today.`
           : rewardResult.newForQuest
             ? `Identified ${safeName}. It has been logged, but no discovery points were awarded.`
             : `Identification ready: ${safeName}. This taxon has already been counted in this quest, or no quest is active.`)
     } catch (error) {
-      const savedImage = await imagePromise
-      setCompendium((current) => dedupeCompendium(current.map((entry) => {
-        if (entry.id !== id) return entry
-        if (entry.identificationStatus === 'corrected') return { ...entry, ...(savedImage ? { image: savedImage } : {}) }
-        return {
-          ...entry,
-          name: 'Unidentified organism',
-          latin: 'Identification unavailable',
-          category: 'Unknown',
-          ...(savedImage ? { image: savedImage } : {}),
-          status: 'Identification failed — correct it when convenient',
-          identificationStatus: 'failed',
-        }
-      })))
       const message = error instanceof Error ? error.message : 'Unknown error'
       console.warn('Background identification failed:', message)
-      setBackgroundNotice('Photo saved, but we could not identify it. You can add the name yourself.')
+      setBackgroundNotice('Photo not added. WildQuest could not verify the subject; try another clear photo of an animal, plant or fungus.')
     }
   }
 

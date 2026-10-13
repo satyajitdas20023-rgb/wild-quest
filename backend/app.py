@@ -121,11 +121,23 @@ def identify_image():
     if requested_category != "auto" and requested_category not in GROUPS:
         return jsonify({"error": "Unsupported organism group."}), 400
     chosen_label = GROUPS.get(requested_category, "any organism") if requested_category != "auto" else "any organism"
-    prompt = f'''Identify the main visible organism in this image. User-selected group: {chosen_label}. Treat this group as a hint, not proof; if the image clearly contradicts it, identify what is actually visible and explain uncertainty. Return JSON only in this shape:
-{{"species":"common name or best broad identification","scientific_name":"scientific name if reasonably certain, otherwise empty string","category":"one allowed category key","alternatives":["alternative 1","alternative 2"],"description":"one short sentence describing visible evidence","identification_status":"identified or uncertain"}}
-Allowed category keys: bird, mammal, reptile, amphibian, fish, insect, arachnid, crustacean, mollusc, other_invertebrate, plant, fungus, other. Identify only as specifically as the visual evidence supports. Do not invent a scientific name. If species-level identification is uncertain, use a broader common name and set identification_status to uncertain. The image may contain an animal, plant, fungus, or no clearly identifiable organism.'''
+    prompt = f'''First decide whether the MAIN subject of this photo is suitable for a biodiversity field Compendium. Return JSON only in this exact shape:
+{{"valid_subject":true,"subject_type":"animal|plant|fungus|human|object|landscape|uncertain","species":"common name or best broad identification","scientific_name":"scientific name if reasonably certain, otherwise empty string","category":"one allowed category key","alternatives":["alternative 1","alternative 2"],"description":"one short sentence describing visible evidence","identification_status":"identified or uncertain"}}
+Set valid_subject=true ONLY when the main visible subject is clearly a non-human animal, plant, or fungus. Set valid_subject=false for a person/human/portrait, chair/furniture, tools, electronics, vehicles, toys, buildings, food, a general landscape, a screenshot, or an image without a clearly identifiable animal, plant, or fungus. Do not classify a human as a mammal for this app. If the subject is ambiguous or cannot be identified as a biodiversity subject, use subject_type="uncertain" and valid_subject=false. The category hint is {chosen_label}; treat it as a hint only, never as proof. Do not invent species names or scientific names.
+Allowed category keys: bird, mammal, reptile, amphibian, fish, insect, arachnid, crustacean, mollusc, other_invertebrate, plant, fungus, other. For a valid subject, use subject_type animal, plant, or fungus. For anything else, valid_subject must be false.'''
     try:
         result = ask_gemma(image_bytes, mime_type, prompt)
+        valid_subject = result.get("valid_subject") is True
+        subject_type = str(result.get("subject_type") or "uncertain").strip().lower()
+        if not valid_subject or subject_type not in {"animal", "plant", "fungus"}:
+            return jsonify({
+                "status": "rejected",
+                "rejected": True,
+                "valid_subject": False,
+                "subject_type": subject_type,
+                "error": "This photo does not clearly show an animal, plant or fungus. It was not added to your Compendium.",
+                "model": MODEL_NAME,
+            }), 422
         species = str(result.get("species", "Unknown organism")).strip() or "Unknown organism"
         scientific_name = str(result.get("scientific_name", "")).strip() or "Scientific name not verified"
         category = str(result.get("category", requested_category if requested_category != "auto" else "other")).lower()
@@ -138,6 +150,8 @@ Allowed category keys: bird, mammal, reptile, amphibian, fish, insect, arachnid,
         predictions.extend({"species": str(name), "scientific_name": "Not verified"} for name in alternatives[:2] if str(name).strip())
         return jsonify({
             "status": "success",
+            "valid_subject": True,
+            "subject_type": subject_type,
             "category": category,
             "category_label": GROUPS[category],
             "group_candidates": [],
