@@ -26,4 +26,6 @@ __pycache__/
 # Environment secrets
 .env
 backend/.env
+.env.*
+!.env.example
 text.txt
