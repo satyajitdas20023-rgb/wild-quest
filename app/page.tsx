@@ -56,6 +56,7 @@ import {
   Target,
 
   Trophy,
+  Trash2,
 
   UserRound,
 
@@ -96,6 +97,11 @@ type SpeciesItem = {
   notes?: string
   modelSuggestion?: string
   correctionNotes?: string
+}
+
+type DeletedCompendiumEntry = {
+  item: SpeciesItem
+  index: number
 }
 
 const quests = [
@@ -497,6 +503,203 @@ type NearbyHabitat = {
   note: string
 }
 
+type NearbyLandscape = {
+  id: string
+  osmType?: string | null
+  osmId?: string | null
+  name: string
+  type: string
+  latitude: number
+  longitude: number
+  distanceKm: number
+  habitatMatch: string | null
+  mapUrl: string
+  source: string
+  approximate: boolean
+  sampleCount?: number | null
+}
+
+type MapCoordinates = { latitude: number; longitude: number }
+
+type LeafletPosition = [number, number]
+interface LeafletLayer { addTo(map: LeafletMap): LeafletLayer }
+interface LeafletMap {
+  setView(center: LeafletPosition, zoom: number): LeafletMap
+  fitBounds(bounds: LeafletPosition[], options?: { padding?: [number, number]; maxZoom?: number }): LeafletMap
+  removeLayer(layer: LeafletLayer): void
+  invalidateSize(): void
+  remove(): void
+}
+interface LeafletApi {
+  map(element: HTMLElement, options?: Record<string, unknown>): LeafletMap
+  tileLayer(url: string, options?: Record<string, unknown>): LeafletLayer
+  divIcon(options: { className?: string; html?: string; iconSize?: [number, number]; iconAnchor?: [number, number] }): unknown
+  marker(position: LeafletPosition, options?: { icon?: unknown; title?: string; alt?: string }): LeafletLayer
+  polyline(positions: LeafletPosition[], options?: Record<string, unknown>): LeafletLayer
+}
+declare global {
+  interface Window { L?: LeafletApi }
+}
+
+let leafletLoadPromise: Promise<LeafletApi> | null = null
+function loadWildQuestLeaflet(): Promise<LeafletApi> {
+  if (typeof window !== 'undefined' && window.L) return Promise.resolve(window.L)
+  if (leafletLoadPromise) return leafletLoadPromise
+  leafletLoadPromise = new Promise<LeafletApi>((resolve, reject) => {
+    const cssId = 'wildquest-leaflet-css'
+    if (!document.getElementById(cssId)) {
+      const link = document.createElement('link')
+      link.id = cssId
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(link)
+    }
+    let existingScript = document.querySelector<HTMLScriptElement>('script[data-wildquest-leaflet="true"]')
+    if (existingScript && existingScript.dataset.failed === 'true') {
+      existingScript.remove()
+      existingScript = null
+    }
+    if (existingScript) {
+      if (window.L) { resolve(window.L); return }
+      existingScript.addEventListener('load', () => window.L ? resolve(window.L) : reject(new Error('Leaflet did not initialise.')), { once: true })
+      existingScript.addEventListener('error', () => reject(new Error('Could not load the interactive map library.')), { once: true })
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.async = true
+    script.dataset.wildquestLeaflet = 'true'
+    script.onload = () => window.L ? resolve(window.L) : reject(new Error('Leaflet did not initialise.'))
+    script.onerror = () => { script.dataset.failed = 'true'; reject(new Error('Could not load the interactive map library.')) }
+    document.head.appendChild(script)
+  }).catch((error) => {
+    leafletLoadPromise = null
+    throw error
+  })
+  return leafletLoadPromise
+}
+
+function InteractiveLandscapeMap({ gpsCoordinates, selectedLandscape }: { gpsCoordinates: MapCoordinates; selectedLandscape: NearbyLandscape | null }) {
+  const mapElementRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<LeafletMap | null>(null)
+  const gpsMarkerRef = useRef<LeafletLayer | null>(null)
+  const destinationMarkerRef = useRef<LeafletLayer | null>(null)
+  const routeLayerRef = useRef<LeafletLayer | null>(null)
+  const [mapError, setMapError] = useState('')
+  const [routeStatus, setRouteStatus] = useState('')
+
+  useEffect(() => () => {
+    mapRef.current?.remove()
+    mapRef.current = null
+    gpsMarkerRef.current = null
+    destinationMarkerRef.current = null
+    routeLayerRef.current = null
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let routeController: AbortController | null = null
+
+    const updateMap = async () => {
+      let leaflet: LeafletApi
+      try {
+        leaflet = await loadWildQuestLeaflet()
+      } catch {
+        if (!cancelled) setMapError('The interactive map could not load. Use “Open larger map” below instead.')
+        return
+      }
+      if (cancelled || !mapElementRef.current) return
+
+      setMapError('')
+      let map = mapRef.current
+      if (!map) {
+        map = leaflet.map(mapElementRef.current, { zoomControl: true, scrollWheelZoom: false })
+        leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>',
+        }).addTo(map)
+        mapRef.current = map
+      }
+
+      if (gpsMarkerRef.current) map.removeLayer(gpsMarkerRef.current)
+      if (destinationMarkerRef.current) map.removeLayer(destinationMarkerRef.current)
+      if (routeLayerRef.current) map.removeLayer(routeLayerRef.current)
+      routeLayerRef.current = null
+
+      const currentIcon = leaflet.divIcon({
+        className: 'wildquest-map-icon', html: '<span class="wildquest-map-marker wildquest-map-marker-current"></span>',
+        iconSize: [22, 22], iconAnchor: [11, 20],
+      })
+      gpsMarkerRef.current = leaflet.marker([gpsCoordinates.latitude, gpsCoordinates.longitude], {
+        icon: currentIcon, title: 'Your current location', alt: 'Your current location',
+      }).addTo(map)
+
+      if (!selectedLandscape) {
+        setRouteStatus('Blue marker: your current location.')
+        map.setView([gpsCoordinates.latitude, gpsCoordinates.longitude], 13)
+        window.requestAnimationFrame(() => map?.invalidateSize())
+        return
+      }
+
+      const destination: LeafletPosition = [selectedLandscape.latitude, selectedLandscape.longitude]
+      const destinationIcon = leaflet.divIcon({
+        className: 'wildquest-map-icon', html: '<span class="wildquest-map-marker wildquest-map-marker-destination"></span>',
+        iconSize: [24, 24], iconAnchor: [12, 22],
+      })
+      destinationMarkerRef.current = leaflet.marker(destination, {
+        icon: destinationIcon, title: selectedLandscape.name, alt: selectedLandscape.name,
+      }).addTo(map)
+
+      setRouteStatus('Finding a driving route…')
+      routeController = new AbortController()
+      const routeUrl = `https://router.project-osrm.org/route/v1/driving/${gpsCoordinates.longitude},${gpsCoordinates.latitude};${selectedLandscape.longitude},${selectedLandscape.latitude}?overview=full&geometries=geojson&steps=false`
+      let fitPoints: LeafletPosition[] = [[gpsCoordinates.latitude, gpsCoordinates.longitude], destination]
+      try {
+        const response = await fetch(routeUrl, { signal: routeController.signal })
+        if (!response.ok) throw new Error('Routing request failed')
+        const payload = await response.json() as { routes?: Array<{ geometry?: { coordinates?: number[][] } }> }
+        const coordinates = payload.routes?.[0]?.geometry?.coordinates
+        if (!Array.isArray(coordinates) || coordinates.length < 2) throw new Error('No road route found')
+        if (cancelled || !mapRef.current) return
+        fitPoints = coordinates
+          .filter((point) => Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]))
+          .map((point) => [point[1], point[0]] as LeafletPosition)
+        routeLayerRef.current = leaflet.polyline(fitPoints, { color: '#71864c', weight: 5, opacity: 0.9 }).addTo(map)
+        setRouteStatus('Driving route shown between your location and the selected spot.')
+      } catch (routeError) {
+        if (cancelled) return
+        if (routeError instanceof Error && routeError.name === 'AbortError') return
+        // Keep both markers visible even if the public routing service is unavailable.
+        routeLayerRef.current = leaflet.polyline(
+          [[gpsCoordinates.latitude, gpsCoordinates.longitude], destination],
+          { color: '#71864c', weight: 4, opacity: 0.8, dashArray: '7 7' },
+        ).addTo(map)
+        setRouteStatus('Road route unavailable; dashed line shows the direct direction, not a road.')
+      }
+      if (!cancelled && mapRef.current) {
+        map.fitBounds(fitPoints, { padding: [26, 26], maxZoom: 15 })
+        window.requestAnimationFrame(() => map?.invalidateSize())
+      }
+    }
+
+    void updateMap()
+    return () => {
+      cancelled = true
+      routeController?.abort()
+    }
+  }, [gpsCoordinates.latitude, gpsCoordinates.longitude, selectedLandscape?.id, selectedLandscape?.latitude, selectedLandscape?.longitude, selectedLandscape?.name])
+
+  return <>
+    <div ref={mapElementRef} className="explore-leaflet-map" role="application" aria-label="Map showing your current location and selected landscape" />
+    {mapError && <div className="explore-map-load-error" role="status">{mapError}</div>}
+    <div className="explore-map-legend">
+      <span><i className="explore-map-legend-dot current" /> Your location</span>
+      {selectedLandscape && <span><i className="explore-map-legend-dot destination" /> Destination</span>}
+      {selectedLandscape && routeStatus && <small>{routeStatus}</small>}
+    </div>
+  </>
+}
+
 type ExploreServiceStatus = 'waiting' | 'running' | 'success' | 'failed' | 'fallback' | 'skipped' | 'partial'
 type ExploreSourceChecks = {
   hasRun: boolean
@@ -778,6 +981,12 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
   const [locationLabel, setLocationLabel] = useState('Location not shared')
   const [gpsCoordinates, setGpsCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null)
+  const [landscapeLoading, setLandscapeLoading] = useState(false)
+  const [landscapeError, setLandscapeError] = useState('')
+  const [landscapeStatus, setLandscapeStatus] = useState('')
+  const [nearbyLandscapes, setNearbyLandscapes] = useState<NearbyLandscape[]>([])
+  const [selectedLandscapeId, setSelectedLandscapeId] = useState<string | null>(null)
+  const [landscapeRadiusKm, setLandscapeRadiusKm] = useState(25)
   const [expandedSpeciesKey, setExpandedSpeciesKey] = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<{ url: string; scientificName: string; commonName: string; source?: string; attribution?: string } | null>(null)
   const [activeEventId, setActiveEventId] = useState<string | null>(null)
@@ -1056,6 +1265,95 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 })
   }
 
+  async function loadNearbyLandscapesAt(latitude: number, longitude: number, radiusKm = landscapeRadiusKm) {
+    setLandscapeLoading(true)
+    setLandscapeError('')
+    setLandscapeStatus('')
+    setSelectedLandscapeId(null)
+    setNearbyLandscapes([])
+
+    try {
+      let habitatForLookup = habitat
+      // ESA is optional for this feature: still show mapped places if its raster is unavailable.
+      if (!habitatForLookup) {
+        try {
+          const habitatResponse = await fetch(`${API_BASE_URL}/explore/habitat?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`)
+          const habitatPayload = await habitatResponse.json()
+          if (habitatResponse.ok) {
+            habitatForLookup = habitatPayload as NearbyHabitat
+            setHabitat(habitatForLookup)
+            setHabitatError('')
+          } else {
+            setLandscapeStatus('ESA habitat spots may be unavailable; named-place search can still continue.')
+          }
+        } catch {
+          setLandscapeStatus('ESA habitat spots may be unavailable; named-place search can still continue.')
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/explore/landscapes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          radiusKm,
+          habitatClasses: habitatForLookup?.classes ?? [],
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Nearby landscape search failed.')
+      const results = Array.isArray(payload.landscapes) ? (payload.landscapes as NearbyLandscape[]).slice(0, 3) : []
+      const warnings = Array.isArray(payload.warnings)
+        ? payload.warnings.filter((value: unknown) => typeof value === 'string' && value.trim()) as string[]
+        : []
+      setNearbyLandscapes(results)
+      setLandscapeStatus(results.length
+        ? `Found ${results.length} nearby spot${results.length === 1 ? '' : 's'} within ${radiusKm} km. Select one to mark it.${warnings.length ? ' Some results may be missing.' : ''}`
+        : warnings.length
+          ? `No places were returned. ${warnings.join(' ')} Try again later or choose a wider radius.`
+          : `No suitable habitat spots or named places were found within ${radiusKm} km. Try a wider radius or another location.`)
+    } catch (lookupError) {
+      setLandscapeError(lookupError instanceof Error ? lookupError.message : 'Could not find nearby landscapes. Please try again.')
+    } finally {
+      setLandscapeLoading(false)
+    }
+  }
+
+  function findNearbyLandscapes() {
+    setLandscapeError('')
+    if (gpsCoordinates) {
+      void loadNearbyLandscapesAt(gpsCoordinates.latitude, gpsCoordinates.longitude)
+      return
+    }
+    if (!('geolocation' in navigator)) {
+      setLandscapeError('This browser does not support location. Try a modern browser or use another device.')
+      return
+    }
+
+    setLandscapeLoading(true)
+    setLandscapeStatus('Requesting your location…')
+    navigator.geolocation.getCurrentPosition((position) => {
+      const { latitude, longitude, accuracy } = position.coords
+      setGpsCoordinates({ latitude, longitude })
+      setGpsAccuracy(Number.isFinite(accuracy) ? accuracy : null)
+      setLocationLabel(`${latitude.toFixed(4)}, ${longitude.toFixed(4)} · GPS`)
+      void loadNearbyLandscapesAt(latitude, longitude)
+    }, (geoError) => {
+      setLandscapeLoading(false)
+      if (geoError.code === geoError.PERMISSION_DENIED) setLandscapeError('Location permission was denied. Allow location access and try again.')
+      else if (geoError.code === geoError.TIMEOUT) setLandscapeError('Location lookup timed out. Please try again.')
+      else setLandscapeError('Could not determine your location. Check your device location settings and try again.')
+      setLandscapeStatus('')
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 })
+  }
+
+  function markLandscapeOnMap(place: NearbyLandscape) {
+    setSelectedLandscapeId(place.id)
+    // The map sits above the landscape list; bring the newly marked destination into view.
+    document.getElementById('explore-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   // Prepare a compact, plain-language summary of nearby habitats and wildlife.
   const combinedExploreContext = habitat && nearbySpecies.length > 0 ? {
     coordinates: gpsCoordinates,
@@ -1066,15 +1364,10 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     evidenceNote: 'These are previous sightings, not guaranteed sightings today.',
   } : null
 
-  const mapSrc = gpsCoordinates ? (() => {
-    const { latitude, longitude } = gpsCoordinates
-    const south = Math.max(-85, latitude - 0.11)
-    const north = Math.min(85, latitude + 0.11)
-    const west = Math.max(-180, longitude - 0.12)
-    const east = Math.min(180, longitude + 0.12)
-    const bounds = [west, south, east, north].map((value) => value.toFixed(6)).join(',')
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bounds)}&layer=mapnik&marker=${latitude}%2C${longitude}`
-  })() : ''
+  const selectedLandscape = nearbyLandscapes.find((place) => place.id === selectedLandscapeId) ?? null
+  const mapPoint = selectedLandscape
+    ? { latitude: selectedLandscape.latitude, longitude: selectedLandscape.longitude }
+    : gpsCoordinates
 
   const activeEvent = EXPLORE_EVENTS.find((event) => event.id === activeEventId)
   if (activeEvent) return <ChilikaEventDetail event={activeEvent} onBack={() => setActiveEventId(null)} />
@@ -1083,12 +1376,14 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     <div className="page-title explore-landing-title"><p className="eyebrow">LOCAL BIODIVERSITY</p><h1>Discover your surroundings.</h1><p>Find nearby wildlife, then follow seasonal events.</p></div>
     <section className="explore-feature-panel explore-local-panel" aria-label="Explore nearby wildlife">
       <div className="explore-module-heading"><div><p className="eyebrow">START HERE</p><h2>Find wildlife near you.</h2><p>Explore nearby wildlife and habitats.</p></div><span className="explore-module-icon"><MapPin size={19} /></span></div>
-    <div className="map-card explore-map-card">
+    <div id="explore-map-card" className="map-card explore-map-card">
       <div className="explore-map-wrap">
-        {gpsCoordinates ? <iframe className="explore-map-iframe" title="OpenStreetMap centered on your GPS location" src={mapSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : <div className="explore-map-empty"><span className="explore-map-empty-icon"><MapPin size={23} /></span><strong>Your map will appear here</strong><span>Share your location to place the map here.</span></div>}
+        {gpsCoordinates
+          ? <InteractiveLandscapeMap gpsCoordinates={gpsCoordinates} selectedLandscape={selectedLandscape} />
+          : <div className="explore-map-empty"><span className="explore-map-empty-icon"><MapPin size={23} /></span><strong>Your map will appear here</strong><span>Share your location to place the map here.</span></div>}
       </div>
-      <div className="map-footer"><div><strong>Your exploration area</strong><span><MapPin size={13} /> {locationLabel}{gpsAccuracy !== null ? ` · ±${Math.round(gpsAccuracy)} m` : ''}</span></div><button className="outline-button" onClick={() => findWildlife(Boolean(gpsCoordinates && seenNearbyTaxa.length))} disabled={loading}>{loading ? 'Finding…' : gpsCoordinates ? 'Next nearby species' : 'Find wildlife near me'}</button></div>
-      {gpsCoordinates && <a className="explore-open-map" href={`https://www.openstreetmap.org/?mlat=${gpsCoordinates.latitude}&mlon=${gpsCoordinates.longitude}#map=14/${gpsCoordinates.latitude}/${gpsCoordinates.longitude}`} target="_blank" rel="noreferrer">Open larger map <ArrowRight size={13} /></a>}
+      <div className="map-footer"><div><strong>{selectedLandscape ? `Marked: ${selectedLandscape.name}` : 'Your exploration area'}</strong><span><MapPin size={13} /> {selectedLandscape ? `${selectedLandscape.type} · ${selectedLandscape.distanceKm.toFixed(1)} km away` : locationLabel}{!selectedLandscape && gpsAccuracy !== null ? ` · ±${Math.round(gpsAccuracy)} m` : ''}</span></div><button className="outline-button" onClick={() => findWildlife(Boolean(gpsCoordinates && seenNearbyTaxa.length))} disabled={loading}>{loading ? 'Finding…' : gpsCoordinates ? 'Next nearby species' : 'Find wildlife near me'}</button></div>
+      {mapPoint && <a className="explore-open-map" href={`https://www.openstreetmap.org/?mlat=${mapPoint.latitude}&mlon=${mapPoint.longitude}#map=14/${mapPoint.latitude}/${mapPoint.longitude}`} target="_blank" rel="noreferrer">{selectedLandscape ? 'Open marked landscape' : 'Open larger map'} <ArrowRight size={13} /></a>}
     </div>
     {sourceChecks.hasRun && !loading && Boolean(gpsCoordinates) && !error && <div className="explore-complete-hint" role="status" aria-live="polite">
       <span className="explore-complete-mark" aria-hidden="true">✓</span>
@@ -1101,6 +1396,54 @@ function Explore({ items, onSearchStatusChange }: { items: SpeciesItem[]; onSear
     </section>}
     {error && <p className="modal-text" role="alert" style={{ marginTop: 12 }}>{error}</p>}
     {habitatError && <p className="modal-text" role="status" style={{ marginTop: 12 }}>Nearby habitat information could not load this time.</p>}
+    </section>
+    <section className="explore-feature-panel nearby-landscapes-panel" aria-label="Optional nearby landscapes">
+      <div className="explore-module-heading">
+        <div>
+          <p className="eyebrow">OPTIONAL FIELD TRIP</p>
+          <h2>Want to visit a nearby natural place?</h2>
+          <p>Find nearby woodland, water, wetlands, beaches and parks. Select a spot to mark it on your map.</p>
+        </div>
+        <span className="explore-module-icon"><Compass size={19} /></span>
+      </div>
+      <div className="nearby-landscape-controls" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
+        <label htmlFor="nearby-landscape-radius" className="modal-text" style={{ margin: 0 }}>Search radius</label>
+        <select id="nearby-landscape-radius" className="filter" value={landscapeRadiusKm} onChange={(event) => setLandscapeRadiusKm(Number(event.target.value))} disabled={landscapeLoading}>
+          <option value={10}>10 km</option>
+          <option value={25}>25 km</option>
+          <option value={50}>50 km</option>
+        </select>
+        <button type="button" className="cream-button" onClick={findNearbyLandscapes} disabled={landscapeLoading}>
+          {landscapeLoading ? 'Searching…' : 'Find nearby landscapes'} <MapPin size={15} />
+        </button>
+      </div>
+      <p className="modal-text" style={{ marginTop: 12 }}>Optional: ESA spots are approximate. Named places come from OpenStreetMap; check access before visiting.</p>
+      {landscapeLoading && <p className="modal-text" role="status" aria-live="polite" style={{ marginTop: 10 }}>{landscapeStatus || 'Checking nearby habitat and mapped landscapes…'}</p>}
+      {landscapeError && <p className="modal-text" role="alert" style={{ marginTop: 10 }}>{landscapeError}</p>}
+      {!landscapeLoading && landscapeStatus && <p className="modal-text" role="status" aria-live="polite" style={{ marginTop: 10 }}>{landscapeStatus}</p>}
+      {nearbyLandscapes.length > 0 && habitat?.classes?.length ? <p className="modal-text nearby-landscape-habitat-context" style={{ marginTop: 10 }}>Nearby land cover: {habitat.classes.slice(0, 3).map((entry) => `${entry.name} (${entry.samplePercent}%)`).join(' · ')}.</p> : null}
+      {nearbyLandscapes.length > 0 && <div className="nearby-species-list nearby-landscape-list" style={{ marginTop: 12 }}>
+        {nearbyLandscapes.map((place) => <article className="nearby-species-card nearby-landscape-card" key={place.id}>
+          <div className="nearby-species-row">
+            <span className="nearby-species-thumb" aria-hidden="true"><MapPin size={21} /></span>
+            <div className="nearby-species-trigger" style={{ cursor: 'default' }}>
+              <span className="nearby-species-main">
+                <span className="rarity">{place.type.toUpperCase()} · {place.distanceKm.toFixed(1)} KM AWAY</span>
+                <strong>{place.name}</strong>
+                <small>{place.approximate ? 'Approximate ESA habitat spot' : 'Mapped place · check access before visiting'}</small>
+              </span>
+            </div>
+          </div>
+          <div className="nearby-landscape-actions" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: '0 14px 14px 14px' }}>
+            <button type="button" className={selectedLandscapeId === place.id ? 'cream-button' : 'outline-button'} onClick={() => markLandscapeOnMap(place)}>
+              {selectedLandscapeId === place.id ? 'Marked on map' : 'Mark on map'} <MapPin size={14} />
+            </button>
+            <a className="text-link" href={`https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`} target="_blank" rel="noreferrer">{place.approximate ? 'Directions' : 'Get directions'} <ArrowRight size={13} /></a>
+            {!place.approximate && place.osmType && place.osmId && <a className="text-link" href={place.mapUrl} target="_blank" rel="noreferrer">OSM details <ArrowRight size={13} /></a>}
+          </div>
+        </article>)}
+      </div>}
+      {nearbyLandscapes.length > 0 && <details className="worldcover-attribution explore-data-details"><summary>About nearby landscapes</summary><p>ESA pins show approximate habitat areas, not verified entrances. Named places are from OpenStreetMap. Check access before travelling.</p><small>ESA attribution: {habitat?.attribution || '© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium.'} Place data © OpenStreetMap contributors.</small></details>}
     </section>
         <section className="seasonal-events-section explore-feature-panel explore-events-panel" aria-label="Seasonal field events">
       <div className="section-heading event-section-heading"><div><p className="eyebrow">SEASONAL FIELD EVENTS</p><h2>Follow the wild seasons.</h2></div><span className="event-section-icon"><Sparkles size={17} /></span></div>
@@ -1343,9 +1686,10 @@ function categoryMatchesFilter(item: SpeciesItem, filter: CompendiumFilter) {
   return category.includes('reptile') || category.includes('reptilia')
 }
 
-function Compendium({ onOpen, onTab, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; onTab: (tab: Tab) => void; items: SpeciesItem[] }) {
+function Compendium({ onOpen, onRemove, onTab, items }: { onOpen: (kind: string, item?: SpeciesItem) => void; onRemove: (item: SpeciesItem) => void; onTab: (tab: Tab) => void; items: SpeciesItem[] }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<CompendiumFilter>('All')
+  const [pendingDelete, setPendingDelete] = useState<SpeciesItem | null>(null)
   const realItems = realCompendiumItems(items)
   const shown = realItems.filter((item) =>
     `${item.name} ${item.latin} ${item.category}`.toLowerCase().includes(query.toLowerCase()) &&
@@ -1379,17 +1723,32 @@ function Compendium({ onOpen, onTab, items }: { onOpen: (kind: string, item?: Sp
       <div className="species-grid compendium-species-scroll">
         {shown.map((item, index) => {
           const count = observationsForEntry(item).length
-          return <button type="button" className={`species-card rarity-${(item.rarity || 'unconfirmed').toLowerCase().replace(' ', '-')}`} key={item.id ?? `${compendiumSpeciesKey(item)}-${index}`} onClick={() => onOpen('species', item)}>
-            <div className="species-photo">{item.image ? <img src={item.image} alt={item.name} /> : <span className="species-photo-placeholder"><Leaf size={26} /></span>}<span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div>
-            <div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div>
-            <div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>
-            <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}><strong>Found {count} time{count === 1 ? '' : 's'}</strong>{item.dateFound ? ` · First: ${formatFoundDate(item.dateFound)}` : ''}</p>
-          </button>
+          return <div className="compendium-entry" key={item.id ?? `${compendiumSpeciesKey(item)}-${index}`}>
+            <button type="button" className={`species-card rarity-${(item.rarity || 'unconfirmed').toLowerCase().replace(' ', '-')}`} onClick={() => onOpen('species', item)}>
+              <div className="species-photo">{item.image ? <img src={item.image} alt={item.name} /> : <span className="species-photo-placeholder"><Leaf size={26} /></span>}<span className="species-points">{item.identificationStatus === 'pending' ? 'Identifying…' : item.identificationStatus === 'failed' ? 'Retry needed' : item.identificationStatus === 'corrected' ? 'Corrected' : item.status?.startsWith('AI suggestion') ? (item.points > 0 ? `Review · +${item.points} pts` : 'Needs review') : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : `+${item.points} pts`}</span></div>
+              <div className="species-copy"><strong>{item.name}</strong><em>{item.latin}</em></div>
+              <div className="species-meta"><span className="species-category">{item.identificationStatus === 'pending' ? 'Processing' : item.identificationStatus === 'failed' ? 'Identification failed' : item.identificationStatus === 'corrected' ? 'User corrected' : item.status && item.status !== 'Demonstration entry' ? 'Needs review' : item.category}</span><span className="species-rarity">{item.rarity}</span></div>
+              <p style={{ padding: '0 12px 12px', margin: 0, fontSize: 12, color: '#656d4a' }}><strong>Found {count} time{count === 1 ? '' : 's'}</strong>{item.dateFound ? ` · First: ${formatFoundDate(item.dateFound)}` : ''}</p>
+            </button>
+            <button type="button" className="compendium-remove-button" aria-label={`Remove ${item.name} from Compendium`} onClick={() => setPendingDelete(item)}><Trash2 size={14} /><span>Remove from Compendium</span></button>
+          </div>
         })}
       </div>
       {!shown.length && <div className="compendium-empty"><BookOpen size={23} /><h2>No matching species</h2><p>{query.trim() ? 'Try a different search term or clear your filters.' : `No ${filter.toLowerCase()} are recorded in your Compendium yet.`}</p><button className="outline-button" onClick={() => { setQuery(''); setFilter('All') }}>Clear filters</button></div>}
     </>}
     {realItems.length === 0 && <div className="compendium-empty"><span className="compendium-empty-mark"><Leaf size={26} /></span><h2>Your discovered animals will appear here.</h2><p>Identify a photo or explore nearby wildlife to begin your personal field guide.</p><div className="compendium-empty-actions"><button className="dark-button" onClick={() => onTab('explore')}>Explore nearby species <ArrowRight size={15} /></button><button className="outline-button" onClick={() => onOpen('photo')}>Identify a photo <Camera size={15} /></button></div></div>}
+    {pendingDelete && <div className="compendium-delete-backdrop" role="presentation" onClick={() => setPendingDelete(null)}>
+      <section className="compendium-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="compendium-delete-title" aria-describedby="compendium-delete-description" onClick={(event) => event.stopPropagation()}>
+        <span className="compendium-delete-icon"><Trash2 size={22} /></span>
+        <p className="eyebrow">CONFIRM REMOVAL</p>
+        <h2 id="compendium-delete-title">Are you sure?</h2>
+        <p id="compendium-delete-description">Remove <strong>{pendingDelete.name}</strong> and its saved sightings from your Compendium? You can undo the most recent removal.</p>
+        <div className="compendium-delete-actions">
+          <button type="button" className="compendium-delete-yes" onClick={() => { onRemove(pendingDelete); setPendingDelete(null) }}>Yes, delete</button>
+          <button type="button" className="compendium-delete-no" onClick={() => setPendingDelete(null)}>No, keep it</button>
+        </div>
+      </section>
+    </div>}
   </div>
 }
 
@@ -1560,6 +1919,16 @@ function PhotoIdentify({ onIdentifyInBackground }: { onIdentifyInBackground: (fi
 
 function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: (item: SpeciesItem) => void; onClose: () => void }) {
   const [editing, setEditing] = useState(false)
+  const [photoExpanded, setPhotoExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!photoExpanded) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPhotoExpanded(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [photoExpanded])
   const [correctedName, setCorrectedName] = useState(item.identificationStatus === 'pending' || item.identificationStatus === 'failed' ? '' : item.name)
   const [correctedCategory, setCorrectedCategory] = useState(() => {
     const match = CATEGORY_OPTIONS.find((option) => option.value.toLowerCase() === item.category.toLowerCase() || option.label.toLowerCase() === item.category.toLowerCase())
@@ -1590,7 +1959,16 @@ function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: 
   }
 
   return <>
-    <img className="modal-image" src={item.image} alt={item.name} />
+    {item.image ? <button
+      type="button"
+      className="compendium-detail-photo-button"
+      onClick={() => setPhotoExpanded(true)}
+      aria-label={`View full-size photo of ${item.name}`}
+      aria-haspopup="dialog"
+    >
+      <img className="modal-image" src={item.image} alt={item.name} />
+      <span className="compendium-detail-photo-hint"><Expand size={15} /> View full image</span>
+    </button> : <div className="modal-image compendium-detail-photo-empty" aria-label="No photo available"><Leaf size={28} /></div>}
     <p className="eyebrow">COMPENDIUM ENTRY</p>
     <h2>{item.name}</h2>
     <em>{item.latin}</em>
@@ -1636,6 +2014,22 @@ function SpeciesDetails({ item, onSave, onClose }: { item: SpeciesItem; onSave: 
       </label>
       <button className="dark-button full" onClick={saveCorrection} disabled={!correctedName.trim()}>Save correction</button>
       <button className="outline-button" onClick={() => setEditing(false)}>Cancel</button>
+    </div>}
+    {photoExpanded && item.image && <div
+      className="compendium-image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Full-size photo of ${item.name}`}
+      onClick={() => setPhotoExpanded(false)}
+    >
+      <div className="compendium-image-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="compendium-image-lightbox-close" onClick={() => setPhotoExpanded(false)} aria-label="Close full-size photo" title="Close"><X size={22} /></button>
+        <img src={item.image} alt={`Full-size photo of ${item.name}`} />
+        <div className="compendium-image-lightbox-caption">
+          <strong>{item.name}</strong>
+          {item.latin && <em>{item.latin}</em>}
+        </div>
+      </div>
     </div>}
   </>
 }
@@ -1684,6 +2078,7 @@ export default function Page() {
 
   const [compendium, setCompendium] = useState<SpeciesItem[]>([])
   const [compendiumLoaded, setCompendiumLoaded] = useState(false)
+  const [lastDeletedCompendiumEntry, setLastDeletedCompendiumEntry] = useState<DeletedCompendiumEntry | null>(null)
   const [backgroundNotice, setBackgroundNotice] = useState('')
   const [questSession, setQuestSession] = useState<QuestSession>({
     id: '', active: false, startedAt: null, steps: 0, discoveries: [], location: null, route: [],
@@ -2025,6 +2420,39 @@ export default function Page() {
     setTab('collection')
   }
 
+  function removeCompendiumItem(item: SpeciesItem) {
+    const key = compendiumSpeciesKey(item)
+    const removedIndex = compendium.findIndex((entry) => compendiumSpeciesKey(entry) === key)
+    const removedEntry = removedIndex >= 0 ? compendium[removedIndex] : item
+    // Keep exactly one undo snapshot: a later deletion replaces this one.
+    setLastDeletedCompendiumEntry({ item: removedEntry, index: removedIndex >= 0 ? removedIndex : compendium.length })
+    setCompendium((current) => current.filter((entry) => compendiumSpeciesKey(entry) !== key))
+    if (selectedSpecies && compendiumSpeciesKey(selectedSpecies) === key) {
+      setSelectedSpecies(undefined)
+      setModal(null)
+    }
+  }
+
+  function undoLastCompendiumDeletion() {
+    const deleted = lastDeletedCompendiumEntry
+    if (!deleted) return
+    const deletedKey = compendiumSpeciesKey(deleted.item)
+    setCompendium((current) => {
+      const existingIndex = current.findIndex((entry) => compendiumSpeciesKey(entry) === deletedKey)
+      if (existingIndex >= 0) {
+        // If this species was re-added after deletion, restore its prior sighting history too.
+        const restored = [...current]
+        restored[existingIndex] = mergeCompendiumEntries(deleted.item, restored[existingIndex])
+        return dedupeCompendium(restored)
+      }
+      const restored = [...current]
+      const insertAt = Math.min(Math.max(0, deleted.index), restored.length)
+      restored.splice(insertAt, 0, deleted.item)
+      return dedupeCompendium(restored)
+    })
+    setLastDeletedCompendiumEntry(null)
+  }
+
   function patchCompendiumEntry(id: string, patch: Partial<SpeciesItem>) {
     setCompendium((current) => current.map((entry) => entry.id === id ? { ...entry, ...patch } : entry))
   }
@@ -2143,6 +2571,11 @@ export default function Page() {
         <Header onProfile={() => setProfile(true)} />
 
         {backgroundNotice && <div className="background-toast" role="status"><span>{backgroundNotice}</span><button type="button" onClick={() => setBackgroundNotice('')} aria-label="Dismiss message"><X size={16} /></button></div>}
+        {lastDeletedCompendiumEntry && <div className="compendium-undo-toast" role="status" style={{ bottom: backgroundNotice ? 148 : 88 }}>
+          <span><strong>{lastDeletedCompendiumEntry.item.name}</strong> removed from Compendium.</span>
+          <button type="button" className="compendium-undo-action" onClick={undoLastCompendiumDeletion}>Undo</button>
+          <button type="button" className="compendium-undo-dismiss" onClick={() => setLastDeletedCompendiumEntry(null)} aria-label="Dismiss undo option" title="Dismiss"><X size={15} /></button>
+        </div>}
 
         {tab !== 'explore' && exploreTaskStatus !== 'idle' && <div key={exploreTaskStatus} className="background-toast explore-background-toast" role="status" style={{ bottom: backgroundNotice ? 148 : 88 }}>
           <span>{exploreTaskStatus === 'running' ? 'Wildlife search is running in the background. You can keep using WildQuest.' : 'Nearby wildlife search is complete. Your results are ready in Explore.'}</span>
@@ -2158,7 +2591,7 @@ export default function Page() {
           <Explore items={compendium} onSearchStatusChange={setExploreTaskStatus} />
         </div>
 
-        {tab === 'collection' && <Compendium onOpen={openModal} onTab={setTab} items={compendium} />}
+        {tab === 'collection' && <Compendium onOpen={openModal} onRemove={removeCompendiumItem} onTab={setTab} items={compendium} />}
 
         {tab === 'community' && <Community items={compendium} onOpenProfile={() => setProfile(true)} />}
 
@@ -2353,6 +2786,19 @@ export default function Page() {
         @media (prefers-reduced-motion: reduce) { .explore-loading-ring, .explore-loading-leaf, .explore-loading-progress span { animation: none; } }
         .explore-map-wrap { position: relative; width: 100%; height: clamp(210px, 58vw, 310px); overflow: hidden; background: #e6e8d8; }
         .explore-map-iframe { display: block; width: 100%; height: 100%; border: 0; background: #e6e8d8; }
+        .explore-leaflet-map { flex: 1 1 auto; width: 100%; height: 0; min-height: 230px; background: #e6e8d8; z-index: 0; }
+        .explore-map-wrap:has(.explore-leaflet-map) { display: flex; flex-direction: column; }
+        .explore-leaflet-map .leaflet-control-attribution { font-size: 9px; }
+        .wildquest-map-marker { display: block; width: 18px; height: 18px; box-sizing: border-box; border: 3px solid #fffdf8; border-radius: 50% 50% 50% 0; box-shadow: 0 2px 8px rgba(27,35,22,.35); transform: rotate(-45deg); }
+        .wildquest-map-marker-current { background: #386fa4; }
+        .wildquest-map-marker-destination { background: #78964d; width: 21px; height: 21px; }
+        .explore-map-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 8px 12px; border-top: 1px solid #e6dfd1; background: #fffdf8; color: #68715a; font-size: 10px; }
+        .explore-map-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+        .explore-map-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+        .explore-map-legend-dot.current { background: #386fa4; }
+        .explore-map-legend-dot.destination { background: #78964d; }
+        .explore-map-legend small { flex-basis: 100%; color: #817b6e; font-size: 9px; line-height: 1.4; }
+        .explore-map-load-error { padding: 12px; color: #7b4a35; background: #fbf0e8; font-size: 11px; line-height: 1.5; }
         .explore-map-empty { display: flex; width: 100%; height: 100%; min-height: 210px; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 24px; color: #526044; text-align: center; background: radial-gradient(circle at 22% 22%, #d3d9bd 0 12%, transparent 13%), radial-gradient(circle at 78% 70%, #c6d0b3 0 18%, transparent 19%), #e7e9d9; }
         .explore-map-empty-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #34402b; color: #fffdf8; }
         .explore-map-empty strong { color: #303a27; font-size: 14px; }
@@ -2392,6 +2838,14 @@ export default function Page() {
         .source-check-status.skipped, .source-check-status.waiting { color: #777668; background: #eeece6; }
         .explore-source-check-note { margin: 8px 0 0; color: #817b6e; font-size: 10px; line-height: 1.5; }
         @media (max-width: 370px) { .explore-source-check-row { flex-direction: column; } .source-check-status { align-self: flex-start; } }
+        .nearby-landscapes-panel { margin-top: 10px; }
+        .nearby-landscape-list { border-top: 1px solid #e6dfd1; }
+        .nearby-landscape-card:last-child { border-bottom: 0; }
+        .nearby-landscape-card .nearby-species-row { align-items: center; }
+        .nearby-landscape-card .nearby-species-trigger { cursor: default; }
+        .nearby-landscape-card .nearby-species-thumb { flex: 0 0 48px; width: 48px; height: 48px; }
+        .nearby-landscape-actions { margin-top: 1px; border-top: 1px solid #eee9df; }
+        .nearby-landscape-habitat-context { padding: 9px 10px; border-radius: 10px; background: #eef0e5; color: #5d694a; line-height: 1.5; }
         .nearby-species-list { display: grid; gap: 0; margin-top: 4px; }
         .nearby-species-card { border-bottom: 1px solid #e6dfd1; }
         .nearby-species-row { display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; padding: 12px 0; }
@@ -2419,6 +2873,21 @@ export default function Page() {
         .nearby-species-details > p { margin: 0; color: #817b6e; font-size: 11px; line-height: 1.45; }
         .nearby-species-details > a, .nearby-detail-photo-link { display: inline-flex; align-items: center; gap: 5px; justify-self: start; color: #586548; font-size: 11px; font-weight: 750; text-decoration: none; }
         .nearby-detail-photo-link { width: fit-content; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+        .compendium-detail-photo-button { position: relative; display: block; width: 100%; margin: 0 0 18px; padding: 0; overflow: hidden; border: 0; border-radius: 12px; background: #e8eadf; text-align: left; cursor: zoom-in; }
+        .compendium-detail-photo-button .modal-image { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; }
+        .compendium-detail-photo-button:focus-visible { outline: 3px solid #8e9b70; outline-offset: 3px; }
+        .compendium-detail-photo-hint { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.3); border-radius: 9px; background: rgba(35, 43, 29, .88); color: #fffdf8; font-size: 11px; font-weight: 750; opacity: .96; }
+        .compendium-detail-photo-empty { display: grid; place-items: center; width: 100%; height: 160px; margin-bottom: 18px; border-radius: 12px; background: #e8eadf; color: #687454; }
+        .compendium-image-lightbox { position: fixed; z-index: 3200; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(12, 15, 10, .94); backdrop-filter: blur(6px); }
+        .compendium-image-lightbox-panel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: min(100%, 1500px); max-height: 100%; }
+        .compendium-image-lightbox-panel > img { display: block; width: auto; max-width: 100%; height: auto; max-height: calc(100vh - 100px); object-fit: contain; background: rgba(0,0,0,.25); border-radius: 4px; }
+        .compendium-image-lightbox-close { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(34, 42, 28, .9); color: #fffdf8; cursor: pointer; }
+        .compendium-image-lightbox-close:hover { background: #46543a; }
+        .compendium-image-lightbox-caption { display: grid; gap: 3px; max-width: 100%; padding: 2px 8px; color: #fffdf8; text-align: center; }
+        .compendium-image-lightbox-caption > strong { overflow-wrap: anywhere; font-size: 15px; }
+        .compendium-image-lightbox-caption > em { color: #dedfce; font-size: 12px; }
+        .compendium-image-lightbox button:focus-visible { outline: 3px solid #c9d7a7; outline-offset: 3px; }
+        @media (max-width: 480px) { .compendium-image-lightbox { padding: 10px; } .compendium-image-lightbox-panel > img { max-height: calc(100vh - 110px); } .compendium-image-lightbox-close { top: 6px; right: 6px; width: 38px; height: 38px; } }
         .nearby-photo-lightbox { position: fixed; z-index: 2200; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(20, 25, 18, .82); backdrop-filter: blur(5px); }
         .nearby-photo-lightbox-panel { position: relative; display: flex; flex-direction: column; width: min(100%, 760px); max-height: min(92vh, 900px); overflow: hidden; border-radius: 16px; background: #fffdf8; box-shadow: 0 22px 80px rgba(0,0,0,.3); }
         .nearby-photo-lightbox-panel > img { display: block; width: 100%; max-height: 70vh; object-fit: contain; background: #171a15; }
@@ -2432,6 +2901,13 @@ export default function Page() {
         .explore-background-toast { animation: explore-toast-dismiss 4s ease forwards; }
         @keyframes explore-toast-dismiss { 0%, 78% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 8px); } }
         .background-toast button { flex: 0 0 auto; display: grid; place-items: center; border: 0; background: transparent; color: inherit; padding: 4px; }
+        .compendium-undo-toast { position: fixed; z-index: 1100; left: 50%; transform: translateX(-50%); width: min(92vw, 440px); display: flex; align-items: center; gap: 10px; padding: 12px 13px; border: 1px solid #d8dfc9; border-radius: 14px; background: #fffdf8; color: #38452e; box-shadow: 0 8px 26px rgba(0,0,0,.2); font-size: 12px; line-height: 1.4; }
+        .compendium-undo-toast > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+        .compendium-undo-toast > span strong { color: #293322; }
+        .compendium-undo-action { flex: 0 0 auto; padding: 6px 10px; border: 1px solid #6e8559; border-radius: 9px; background: #e7eddc; color: #36502a; font-size: 12px; font-weight: 800; cursor: pointer; }
+        .compendium-undo-action:hover { background: #d9e4cb; }
+        .compendium-undo-dismiss { flex: 0 0 auto; display: grid; place-items: center; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: #777567; cursor: pointer; }
+        .compendium-undo-toast button:focus-visible { outline: 3px solid #9bab83; outline-offset: 2px; }
         /* Remove the translucent circular decoration covering compendium photos. */
         .species-photo::before,
         .species-photo::after {
@@ -2444,9 +2920,26 @@ export default function Page() {
         }
         /* Compendium: horizontal, swipeable card shelf instead of a long vertical grid. */
         .compendium-species-scroll { display: flex !important; flex-wrap: nowrap; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 14px; margin: 0 -2px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #a4ac86 transparent; }
-        .compendium-species-scroll .species-card { flex: 0 0 min(72%, 260px); width: min(72%, 260px); min-width: 0; scroll-snap-align: start; }
+        .compendium-species-scroll .compendium-entry { display: flex; flex: 0 0 min(72%, 260px); flex-direction: column; align-items: stretch; gap: 7px; width: min(72%, 260px); min-width: 0; scroll-snap-align: start; }
+        .compendium-species-scroll .compendium-entry .species-card { flex: none; width: 100%; min-width: 0; scroll-snap-align: unset; }
         .compendium-species-scroll .species-photo { height: 174px; }
-        @media (min-width: 700px) { .compendium-species-scroll .species-card { flex-basis: 250px; width: 250px; } }
+        .compendium-remove-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 34px; padding: 7px 9px; border: 1px solid #ead3cf; border-radius: 10px; background: #fff8f6; color: #a92f2a; font-size: 11px; font-weight: 750; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+        .compendium-remove-button:hover { background: #ffebe8; border-color: #dba8a2; }
+        .compendium-remove-button:focus-visible, .compendium-delete-actions button:focus-visible { outline: 3px solid #9bab83; outline-offset: 2px; }
+        .compendium-delete-backdrop { position: fixed; z-index: 2400; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(24, 29, 20, .58); backdrop-filter: blur(4px); }
+        .compendium-delete-dialog { display: grid; gap: 10px; width: min(100%, 390px); padding: 24px; border: 1px solid #e5dfd1; border-radius: 20px; background: #fffdf8; box-shadow: 0 24px 80px rgba(0,0,0,.28); text-align: center; }
+        .compendium-delete-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 2px; border-radius: 15px; background: #fbe7e4; color: #b52d29; }
+        .compendium-delete-dialog .eyebrow { margin: 0; color: #8c7860; }
+        .compendium-delete-dialog h2 { margin: 0; color: #303a27; font-size: 23px; line-height: 1.15; }
+        .compendium-delete-dialog > p:last-of-type { margin: 0; color: #777567; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+        .compendium-delete-dialog > p:last-of-type strong { color: #3d4932; }
+        .compendium-delete-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+        .compendium-delete-actions button { min-height: 42px; padding: 10px 12px; border: 0; border-radius: 11px; color: white; font-size: 12px; font-weight: 800; cursor: pointer; }
+        .compendium-delete-yes { background: #c63832; }
+        .compendium-delete-yes:hover { background: #a92b26; }
+        .compendium-delete-no { background: #64804b; }
+        .compendium-delete-no:hover { background: #4d6738; }
+        @media (min-width: 700px) { .compendium-species-scroll .compendium-entry { flex-basis: 250px; width: 250px; } }
 
         /* Compact Explore landing: put nearby discovery first while bringing seasonal events into the first viewport. */
         .explore-landing-title { margin-bottom: 8px; }
@@ -2458,8 +2951,8 @@ export default function Page() {
         .explore-local-panel .explore-module-heading h2 { font-size: 17px; line-height: 1.15; }
         .explore-local-panel .explore-module-heading p:not(.eyebrow) { margin-top: 3px; font-size: 10px; line-height: 1.35; }
         .explore-local-panel .explore-module-icon { flex-basis: 34px; width: 34px; height: 34px; }
-        .explore-local-panel .explore-map-wrap { height: clamp(118px, 30vw, 148px); }
-        .explore-local-panel .explore-map-empty { min-height: 118px; gap: 5px; padding: 12px; }
+        .explore-local-panel .explore-map-wrap { display: flex; flex-direction: column; height: clamp(290px, 64vw, 430px); }
+        .explore-local-panel .explore-map-empty { min-height: 290px; gap: 5px; padding: 12px; }
         .explore-local-panel .explore-map-empty-icon { width: 35px; height: 35px; }
         .explore-local-panel .explore-map-empty strong { font-size: 12px; }
         .explore-local-panel .explore-map-empty > span:last-child { max-width: 280px; font-size: 10px; line-height: 1.35; }
@@ -2588,8 +3081,8 @@ export default function Page() {
         .explore-local-panel .explore-module-heading h2 { font-size: 17px; line-height: 1.15; }
         .explore-local-panel .explore-module-heading p:not(.eyebrow) { margin-top: 3px; font-size: 10px; line-height: 1.35; }
         .explore-local-panel .explore-module-icon { flex-basis: 34px; width: 34px; height: 34px; }
-        .explore-local-panel .explore-map-wrap { height: clamp(118px, 30vw, 148px); }
-        .explore-local-panel .explore-map-empty { min-height: 118px; gap: 5px; padding: 12px; }
+        .explore-local-panel .explore-map-wrap { display: flex; flex-direction: column; height: clamp(290px, 64vw, 430px); }
+        .explore-local-panel .explore-map-empty { min-height: 290px; gap: 5px; padding: 12px; }
         .explore-local-panel .explore-map-empty-icon { width: 35px; height: 35px; }
         .explore-local-panel .explore-map-empty strong { font-size: 12px; }
         .explore-local-panel .explore-map-empty > span:last-child { max-width: 280px; font-size: 10px; line-height: 1.35; }

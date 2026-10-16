@@ -20,3 +20,25 @@ button { font:inherit; color:inherit; cursor:pointer; }
   content: none !important;
   display: none !important;
 }
+
+/* Persistent bottom navigation */
+.bottom-nav {
+  position: fixed !important;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 100%;
+  max-width: 480px;
+  z-index: 1000;
+
+  background: var(--cream);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+/* Keep the navigation area clear of page content */
+.phone-frame {
+  padding-bottom: 92px;
+}
